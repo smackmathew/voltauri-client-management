@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "time_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tech_id", "order": "ASCENDING" },
+        { "fieldPath": "clock_in", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "time_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "client_id", "order": "ASCENDING" },
+        { "fieldPath": "clock_in", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

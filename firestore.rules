@@ -1,0 +1,390 @@
+rules_version = '2';
+
+// Data layout:
+//   config/org                      -> { name, owner_id }                 the organization (Tauri)
+//   users/{uid}                     -> { full_name, email, role, client_id, active, active_entry_id }
+//                                      role is 'admin' | 'tech' | 'client'; client users carry their client_id
+//   invites/{code}                  -> { role, client_id, email, used_by } how every user after the first joins
+//   clients/{cid}                   -> { name, contact_name, email, phone, address, notes, active }
+//   tasks/{id}                      -> work items, each for one client
+//   tickets/{id}                    -> help desk requests, each for one client
+//   tickets/{id}/comments/{cid}     -> the ticket's thread; internal notes are hidden from clients
+//   time_entries/{id}               -> clock in / clock out punches
+//
+// Who sees what:
+//   admins see and manage everything; techs see all clients, tasks and tickets but only their
+//   own time; client users see only their own company's record, tasks, tickets and time.
+//
+// Accountability: clock-in and clock-out times are stamped by the server (request.time), so
+// nobody can type in their own times. A tech has at most one open entry, tracked by
+// users/{uid}.active_entry_id. Only admins can correct an entry, and a correction must give a
+// reason and keeps the original punch alongside it. Time entries are never deleted.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function clientPath(cid) {
+      return /databases/$(database)/documents/clients/$(cid);
+    }
+
+    function entryPath(id) {
+      return /databases/$(database)/documents/time_entries/$(id);
+    }
+
+    function orgPath() {
+      return /databases/$(database)/documents/config/org;
+    }
+
+    function me() {
+      return get(userPath(request.auth.uid)).data;
+    }
+
+    function isActive() {
+      return signedIn() && exists(userPath(request.auth.uid)) && me().active == true;
+    }
+
+    function isAdmin() {
+      return isActive() && me().role == 'admin';
+    }
+
+    function isStaff() {
+      return isActive() && me().role in ['admin', 'tech'];
+    }
+
+    function isClientUser(cid) {
+      return isActive() && me().role == 'client' && me().client_id == cid;
+    }
+
+    function nonEmptyString(value) {
+      return value is string && value.size() > 0;
+    }
+
+    function optionalString(value) {
+      return value == null || value is string;
+    }
+
+    function isDate(value) {
+      return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function unchanged(keys) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys);
+    }
+
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function hasExactly(data, keys) {
+      return data.keys().hasOnly(keys) && data.keys().hasAll(keys);
+    }
+
+    // Client users belong to exactly one client; staff to none.
+    function validRoleAndClient(data) {
+      return data.role in ['admin', 'tech', 'client']
+        && (data.role == 'client'
+          ? data.client_id is string && exists(clientPath(data.client_id))
+          : data.client_id == null);
+    }
+
+    match /config/org {
+      allow read: if signedIn();
+      // Created once, by the founding admin, in the same batch as their profile.
+      allow create: if signedIn()
+        && hasExactly(request.resource.data, ['name', 'owner_id', 'created_at'])
+        && nonEmptyString(request.resource.data.name)
+        && request.resource.data.owner_id == request.auth.uid
+        && request.resource.data.created_at == request.time
+        && getAfter(userPath(request.auth.uid)).data.role == 'admin';
+      allow update: if isAdmin() && changedOnly(['name']) && nonEmptyString(request.resource.data.name);
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isStaff());
+      allow list: if isStaff();
+
+      allow create: if signedIn() && request.auth.uid == uid
+        && validNewProfile(request.resource.data)
+        && (foundingAdmin(request.resource.data) || joiningWithInvite(request.resource.data));
+
+      allow update: if (isAdmin() && adminEdit())
+        || (signedIn() && request.auth.uid == uid && (renaming() || clockingIn() || clockingOut()));
+
+      function validNewProfile(data) {
+        return hasExactly(data, ['full_name', 'email', 'role', 'client_id', 'active', 'active_entry_id', 'invite_code', 'created_at'])
+          && nonEmptyString(data.full_name)
+          && data.email == request.auth.token.email
+          && data.active == true
+          && data.active_entry_id == null
+          && data.created_at == request.time;
+      }
+
+      // The very first account sets up the organization and becomes its admin.
+      function foundingAdmin(data) {
+        return data.role == 'admin' && data.client_id == null && data.invite_code == null
+          && !exists(orgPath())
+          && getAfter(orgPath()).data.owner_id == uid;
+      }
+
+      // Everyone else joins with an unused invite, taking the role and client it was issued for.
+      function joiningWithInvite(data) {
+        let invitePath = /databases/$(database)/documents/invites/$(data.invite_code);
+        let invite = get(invitePath).data;
+        return data.invite_code is string
+          && invite.used_by == null
+          && getAfter(invitePath).data.used_by == uid
+          && data.role == invite.role
+          && data.client_id == invite.client_id
+          && (invite.email == null || invite.email == request.auth.token.email.lower());
+      }
+
+      function adminEdit() {
+        let data = request.resource.data;
+        return changedOnly(['full_name', 'role', 'client_id', 'active', 'active_entry_id'])
+          && nonEmptyString(data.full_name)
+          && validRoleAndClient(data)
+          && data.active is bool
+          // An admin can't lock themselves out by demoting or deactivating their own account.
+          && (uid != request.auth.uid || (data.role == 'admin' && data.active == true))
+          // Admins may only clear an open punch (a forced clock-out), never set one.
+          && (unchanged(['active_entry_id']) || data.active_entry_id == null);
+      }
+
+      function renaming() {
+        return changedOnly(['full_name']) && nonEmptyString(request.resource.data.full_name);
+      }
+
+      // Points at a time entry created in this same batch.
+      function clockingIn() {
+        let id = request.resource.data.active_entry_id;
+        return changedOnly(['active_entry_id'])
+          && resource.data.active_entry_id == null
+          && id is string
+          && !exists(entryPath(id))
+          && getAfter(entryPath(id)).data.tech_id == uid;
+      }
+
+      // Clears the pointer once the entry it pointed at is closed in this same batch.
+      function clockingOut() {
+        return changedOnly(['active_entry_id'])
+          && request.resource.data.active_entry_id == null
+          && resource.data.active_entry_id is string
+          && getAfter(entryPath(resource.data.active_entry_id)).data.clock_out != null;
+      }
+    }
+
+    match /invites/{code} {
+      // Readable one at a time by code (to join); only admins can list them.
+      allow get: if signedIn();
+      allow list: if isAdmin();
+
+      allow create: if isAdmin()
+        && code.size() >= 8
+        && hasExactly(request.resource.data, ['role', 'client_id', 'email', 'created_by', 'created_at', 'used_by', 'used_at'])
+        && validRoleAndClient(request.resource.data)
+        && (request.resource.data.email == null
+          || (request.resource.data.email is string && request.resource.data.email == request.resource.data.email.lower()))
+        && request.resource.data.created_by == request.auth.uid
+        && request.resource.data.created_at == request.time
+        && request.resource.data.used_by == null
+        && request.resource.data.used_at == null;
+
+      // Redeemed by the new user, in the same batch that creates their profile.
+      allow update: if signedIn()
+        && resource.data.used_by == null
+        && changedOnly(['used_by', 'used_at'])
+        && request.resource.data.used_by == request.auth.uid
+        && request.resource.data.used_at == request.time
+        && getAfter(userPath(request.auth.uid)).data.invite_code == code;
+
+      allow delete: if isAdmin();
+    }
+
+    match /clients/{cid} {
+      allow read: if isStaff() || isClientUser(cid);
+      // Clients are deactivated rather than deleted, so their history stays intact.
+      allow create, update: if isAdmin()
+        && hasExactly(request.resource.data, ['name', 'contact_name', 'email', 'phone', 'address', 'notes', 'active', 'created_at'])
+        && nonEmptyString(request.resource.data.name)
+        && optionalString(request.resource.data.contact_name)
+        && optionalString(request.resource.data.email)
+        && optionalString(request.resource.data.phone)
+        && optionalString(request.resource.data.address)
+        && optionalString(request.resource.data.notes)
+        && request.resource.data.active is bool
+        && request.resource.data.created_at is timestamp;
+    }
+
+    match /tasks/{id} {
+      allow read: if isStaff() || isClientUser(resource.data.client_id);
+      allow create: if isStaff() && validTask(request.resource.data)
+        && request.resource.data.created_by == request.auth.uid
+        && request.resource.data.created_at == request.time;
+      allow update: if isStaff() && validTask(request.resource.data)
+        && unchanged(['created_by', 'created_at']);
+      allow delete: if isAdmin();
+
+      function validTask(data) {
+        return hasExactly(data, ['title', 'description', 'client_id', 'assignee_id', 'assignee_name', 'status', 'priority', 'due_date', 'created_by', 'created_at', 'updated_at', 'completed_at'])
+          && nonEmptyString(data.title)
+          && optionalString(data.description)
+          && data.client_id is string && exists(clientPath(data.client_id))
+          && ((data.assignee_id == null && data.assignee_name == null)
+            || (data.assignee_id is string && nonEmptyString(data.assignee_name)))
+          && data.status in ['todo', 'in_progress', 'blocked', 'done']
+          && data.priority in ['low', 'normal', 'high', 'urgent']
+          && (data.due_date == null || isDate(data.due_date))
+          && data.updated_at == request.time
+          && (data.status == 'done' ? data.completed_at is timestamp : data.completed_at == null);
+      }
+    }
+
+    match /tickets/{id} {
+      allow read: if isStaff() || isClientUser(resource.data.client_id);
+
+      allow create: if validTicket(request.resource.data)
+        && request.resource.data.requester_id == request.auth.uid
+        && request.resource.data.created_at == request.time
+        && (isStaff()
+          || (isClientUser(request.resource.data.client_id)
+            && request.resource.data.status == 'open'
+            && request.resource.data.assignee_id == null));
+
+      // Staff work the ticket; the client can only close it or reopen it.
+      allow update: if validTicket(request.resource.data)
+        && unchanged(['client_id', 'requester_id', 'requester_name', 'created_at'])
+        && (isStaff()
+          || (isClientUser(resource.data.client_id)
+            && changedOnly(['status', 'updated_at', 'resolved_at'])
+            && request.resource.data.status in ['open', 'closed']));
+
+      function validTicket(data) {
+        return hasExactly(data, ['subject', 'description', 'client_id', 'requester_id', 'requester_name', 'assignee_id', 'assignee_name', 'status', 'priority', 'created_at', 'updated_at', 'resolved_at'])
+          && nonEmptyString(data.subject)
+          && optionalString(data.description)
+          && data.client_id is string && exists(clientPath(data.client_id))
+          && nonEmptyString(data.requester_name)
+          && ((data.assignee_id == null && data.assignee_name == null)
+            || (data.assignee_id is string && nonEmptyString(data.assignee_name)))
+          && data.status in ['open', 'in_progress', 'waiting', 'resolved', 'closed']
+          && data.priority in ['low', 'normal', 'high', 'urgent']
+          && data.updated_at == request.time
+          && (data.status in ['resolved', 'closed'] ? data.resolved_at is timestamp : data.resolved_at == null);
+      }
+
+      function ticketClient() {
+        return get(/databases/$(database)/documents/tickets/$(id)).data.client_id;
+      }
+
+      // The thread is append-only, so it doubles as the ticket's history.
+      match /comments/{commentId} {
+        allow read: if isStaff() || (isClientUser(ticketClient()) && resource.data.internal == false);
+        allow create: if hasExactly(request.resource.data, ['author_id', 'author_name', 'body', 'internal', 'created_at'])
+          && request.resource.data.author_id == request.auth.uid
+          && nonEmptyString(request.resource.data.author_name)
+          && nonEmptyString(request.resource.data.body)
+          && request.resource.data.internal is bool
+          && request.resource.data.created_at == request.time
+          && (isStaff() || (isClientUser(ticketClient()) && request.resource.data.internal == false));
+      }
+    }
+
+    match /time_entries/{id} {
+      allow read: if isAdmin()
+        || (isStaff() && resource.data.tech_id == request.auth.uid)
+        || isClientUser(resource.data.client_id);
+
+      allow create: if clockIn() || adminManualEntry();
+      allow update: if clockOut() || editOwnNotes() || adminCorrection();
+
+      function validEntry(data) {
+        return hasExactly(data, ['tech_id', 'tech_name', 'client_id', 'client_name', 'task_id', 'ticket_id', 'notes', 'clock_in', 'clock_out', 'edited_by', 'edited_at', 'edit_reason', 'original', 'created_by', 'created_at'])
+          && data.tech_id is string
+          && nonEmptyString(data.tech_name)
+          && data.client_id is string && exists(clientPath(data.client_id))
+          && nonEmptyString(data.client_name)
+          && optionalString(data.task_id)
+          && optionalString(data.ticket_id)
+          && data.notes is string
+          && data.clock_in is timestamp
+          && (data.clock_out == null || (data.clock_out is timestamp && data.clock_out > data.clock_in));
+      }
+
+      // A tech starts their own shift. The server stamps the time, and the tech must not
+      // already be on the clock.
+      function clockIn() {
+        let data = request.resource.data;
+        return isStaff() && validEntry(data)
+          && data.tech_id == request.auth.uid
+          && data.created_by == request.auth.uid
+          && data.clock_in == request.time
+          && data.created_at == request.time
+          && data.clock_out == null
+          && data.edited_by == null && data.edited_at == null && data.edit_reason == null && data.original == null
+          && get(clientPath(data.client_id)).data.active == true
+          && me().active_entry_id == null
+          && getAfter(userPath(request.auth.uid)).data.active_entry_id == id;
+      }
+
+      // The tech closes their own open entry, stamped by the server.
+      function clockOut() {
+        return signedIn() && resource.data.tech_id == request.auth.uid
+          && resource.data.clock_out == null
+          && changedOnly(['clock_out', 'notes'])
+          && request.resource.data.clock_out == request.time
+          && request.resource.data.notes is string
+          && getAfter(userPath(request.auth.uid)).data.active_entry_id == null;
+      }
+
+      function editOwnNotes() {
+        return signedIn() && resource.data.tech_id == request.auth.uid
+          && resource.data.clock_out == null
+          && changedOnly(['notes'])
+          && request.resource.data.notes is string;
+      }
+
+      // An admin records a missed punch. It's marked as edited, with the reason.
+      function adminManualEntry() {
+        let data = request.resource.data;
+        return isAdmin() && validEntry(data)
+          && get(userPath(data.tech_id)).data.role in ['admin', 'tech']
+          && data.created_by == request.auth.uid
+          && data.created_at == request.time
+          && data.clock_out is timestamp
+          && data.clock_out <= request.time
+          && data.edited_by == request.auth.uid
+          && data.edited_at == request.time
+          && nonEmptyString(data.edit_reason)
+          && data.original == null;
+      }
+
+      // An admin corrects an entry (or clocks out a tech who forgot). The first correction
+      // saves the original punch, which is never overwritten afterwards.
+      function adminCorrection() {
+        let data = request.resource.data;
+        return isAdmin() && validEntry(data)
+          && unchanged(['tech_id', 'tech_name', 'created_by', 'created_at'])
+          && data.clock_in <= request.time
+          && (data.clock_out == null || data.clock_out <= request.time)
+          && data.edited_by == request.auth.uid
+          && data.edited_at == request.time
+          && nonEmptyString(data.edit_reason)
+          && (resource.data.original == null
+            ? data.original == { 'clock_in': resource.data.clock_in, 'clock_out': resource.data.clock_out, 'client_id': resource.data.client_id }
+            : data.original == resource.data.original)
+          // A closed entry can't be reopened.
+          && (resource.data.clock_out == null || data.clock_out != null)
+          // Closing an open entry also takes the tech off the clock, in the same batch.
+          && (resource.data.clock_out != null || data.clock_out == null
+            || getAfter(userPath(data.tech_id)).data.active_entry_id != id);
+      }
+    }
+  }
+}
