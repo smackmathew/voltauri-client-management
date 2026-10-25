@@ -14,6 +14,8 @@ const NAV_ITEMS: { to: string; label: string; roles: Role[]; end?: boolean }[] =
   { to: "/tasks", label: "Tasks", roles: ["admin", "tech", "client"] },
   { to: "/helpdesk", label: "Help Desk", roles: ["admin", "tech", "client"] },
   { to: "/clients", label: "Clients", roles: ["admin", "tech"] },
+  { to: "/billing", label: "Billing", roles: ["admin"] },
+  { to: "/invoices", label: "Invoices", roles: ["client"] },
   { to: "/team", label: "Team", roles: ["admin"] },
 ];
 
@@ -31,7 +33,7 @@ export default function Layout() {
   return (
     <DirectoryProvider>
       <div className="min-h-screen bg-slate-50">
-        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <header className="no-print sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
             <div className="flex items-center gap-6">
               <span className="flex items-center gap-2 text-lg font-semibold text-brand-700">

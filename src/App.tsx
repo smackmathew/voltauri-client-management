@@ -5,9 +5,12 @@ import { PageLoader } from "./components/ui";
 import { useAuth } from "./context/AuthContext";
 import type { Role } from "./types";
 
+const Billing = lazy(() => import("./pages/Billing"));
 const Clients = lazy(() => import("./pages/Clients"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const HelpDesk = lazy(() => import("./pages/HelpDesk"));
+const Invoice = lazy(() => import("./pages/Invoice"));
+const Invoices = lazy(() => import("./pages/Invoices"));
 const Login = lazy(() => import("./pages/Login"));
 const Tasks = lazy(() => import("./pages/Tasks"));
 const Team = lazy(() => import("./pages/Team"));
@@ -59,6 +62,9 @@ export default function App() {
         <Route path="helpdesk/:id" element={<Ticket />} />
         <Route path="clients" element={<Only roles={["admin", "tech"]}><Clients /></Only>} />
         <Route path="team" element={<Only roles={["admin"]}><Team /></Only>} />
+        <Route path="billing" element={<Only roles={["admin"]}><Billing /></Only>} />
+        <Route path="invoices" element={<Only roles={["client"]}><Invoices /></Only>} />
+        <Route path="invoices/:id" element={<Only roles={["admin", "client"]}><Invoice /></Only>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

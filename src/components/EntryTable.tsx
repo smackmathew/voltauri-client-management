@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { entryDuration } from "../firebase/time";
 import { formatDate, formatDuration, formatHours, formatTime } from "../lib/format";
 import { useNow } from "../lib/useLive";
@@ -59,9 +60,15 @@ export default function EntryTable({ entries, showTech = true, showClient = true
               </td>
               {onEdit && (
                 <td className="whitespace-nowrap px-4 py-2 text-right">
-                  <button onClick={() => onEdit(entry)} className="text-xs font-medium text-brand-700 hover:text-brand-800">
-                    {entry.clock_out ? "Correct" : "Clock out"}
-                  </button>
+                  {entry.invoice_id ? (
+                    <Link to={`/invoices/${entry.invoice_id}`} title="Billed time can't be changed unless its invoice is voided or deleted">
+                      <Badge tone="violet">Billed</Badge>
+                    </Link>
+                  ) : (
+                    <button onClick={() => onEdit(entry)} className="text-xs font-medium text-brand-700 hover:text-brand-800">
+                      {entry.clock_out ? "Correct" : "Clock out"}
+                    </button>
+                  )}
                 </td>
               )}
             </tr>

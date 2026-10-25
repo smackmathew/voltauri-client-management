@@ -16,6 +16,7 @@ export const toClient: Mapper<Client> = (snap) => {
     address: data.address ?? null,
     notes: data.notes ?? null,
     active: data.active === true,
+    hourly_rate_cents: data.hourly_rate_cents ?? null,
   };
 };
 
@@ -28,6 +29,7 @@ function fields(input: ClientInput) {
     address: textOrNull(input.address),
     notes: textOrNull(input.notes),
     active: input.active,
+    hourly_rate_cents: input.hourly_rate_cents,
   };
 }
 

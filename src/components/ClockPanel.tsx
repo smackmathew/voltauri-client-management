@@ -13,7 +13,7 @@ import { buttonClass, ErrorNote, Field, inputClass, LiveDot } from "./ui";
 export default function ClockPanel() {
   const profile = useProfile();
   const { clients } = useDirectory();
-  const { data: entry, loading } = useActiveEntry();
+  const { data: entry, loading, error: entryError } = useActiveEntry();
   const now = useNow();
 
   const [clientId, setClientId] = useState("");
@@ -64,6 +64,16 @@ export default function ClockPanel() {
   }
 
   if (loading) return <div className="h-64 animate-pulse rounded-xl bg-slate-100" />;
+
+  // On the clock, but the shift hasn't loaded: never offer to clock in again.
+  if (profile.active_entry_id && !entry) {
+    return (
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-sm text-emerald-800 shadow-sm">
+        <p className="font-semibold">You're on the clock.</p>
+        <p className="mt-1">{entryError ? "Your shift couldn't be loaded. Reload the page to see it." : "Loading your shift…"}</p>
+      </div>
+    );
+  }
 
   if (entry) {
     const ticket = tickets.data.find((t) => t.id === entry.ticket_id);

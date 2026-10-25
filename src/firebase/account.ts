@@ -4,8 +4,9 @@ import {
   signOut as firebaseSignOut,
   type User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, writeBatch, type DocumentSnapshot } from "firebase/firestore";
-import type { Organization, Profile } from "../types";
+import { doc, getDoc, serverTimestamp, updateDoc, writeBatch, type DocumentSnapshot } from "firebase/firestore";
+import { DEFAULT_BILLING } from "../lib/billing";
+import type { BillingSettings, Organization, Profile } from "../types";
 import { auth, db } from "./app";
 import { commit, snapshotData } from "./data";
 
@@ -56,9 +57,30 @@ export async function loadProfile(uid: string): Promise<Profile | null> {
   return snap.exists() ? toProfile(snap) : null;
 }
 
+export function toOrganization(snap: DocumentSnapshot): Organization {
+  const data = snapshotData(snap);
+  return {
+    name: data.name,
+    owner_id: data.owner_id,
+    next_invoice_number: data.next_invoice_number ?? 1,
+    address: data.address ?? DEFAULT_BILLING.address,
+    currency: data.currency ?? DEFAULT_BILLING.currency,
+    default_rate_cents: data.default_rate_cents ?? DEFAULT_BILLING.default_rate_cents,
+    billing_increment_minutes: data.billing_increment_minutes ?? DEFAULT_BILLING.billing_increment_minutes,
+    default_tax_rate_bp: data.default_tax_rate_bp ?? DEFAULT_BILLING.default_tax_rate_bp,
+    payment_terms_days: data.payment_terms_days ?? DEFAULT_BILLING.payment_terms_days,
+    payment_instructions: data.payment_instructions ?? DEFAULT_BILLING.payment_instructions,
+  };
+}
+
 export async function loadOrganization(): Promise<Organization | null> {
   const snap = await getDoc(orgDoc());
-  return snap.exists() ? { name: snap.data().name, owner_id: snap.data().owner_id } : null;
+  return snap.exists() ? toOrganization(snap) : null;
+}
+
+/** Admin: the company name and billing settings. */
+export function updateOrganization(changes: Partial<BillingSettings> & { name?: string }) {
+  return updateDoc(orgDoc(), changes);
 }
 
 function currentUser(): FirebaseUser {

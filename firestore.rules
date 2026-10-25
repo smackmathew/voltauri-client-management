@@ -10,6 +10,7 @@ rules_version = '2';
 //   tickets/{id}                    -> help desk requests, each for one client
 //   tickets/{id}/comments/{cid}     -> the ticket's thread; internal notes are hidden from clients
 //   time_entries/{id}               -> clock in / clock out punches
+//   invoices/{id}                   -> invoices built from time entries; money in integer *_cents
 //
 // Who sees what:
 //   admins see and manage everything; techs see all clients, tasks and tickets but only their
@@ -19,6 +20,10 @@ rules_version = '2';
 // nobody can type in their own times. A tech has at most one open entry, tracked by
 // users/{uid}.active_entry_id. Only admins can correct an entry, and a correction must give a
 // reason and keeps the original punch alongside it. Time entries are never deleted.
+//
+// Billing: only admins see rates in use and make invoices. An entry is billed on at most one
+// invoice, and while it's billed nobody can change it; deleting the draft or voiding the
+// invoice frees it again. Clients see their own invoices once sent, never drafts.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -40,6 +45,10 @@ service cloud.firestore {
 
     function orgPath() {
       return /databases/$(database)/documents/config/org;
+    }
+
+    function invoicePath(id) {
+      return /databases/$(database)/documents/invoices/$(id);
     }
 
     function me() {
@@ -86,6 +95,10 @@ service cloud.firestore {
       return data.keys().hasOnly(keys) && data.keys().hasAll(keys);
     }
 
+    function optionalCents(value) {
+      return value == null || (value is int && value >= 0);
+    }
+
     // Client users belong to exactly one client; staff to none.
     function validRoleAndClient(data) {
       return data.role in ['admin', 'tech', 'client']
@@ -103,7 +116,26 @@ service cloud.firestore {
         && request.resource.data.owner_id == request.auth.uid
         && request.resource.data.created_at == request.time
         && getAfter(userPath(request.auth.uid)).data.role == 'admin';
-      allow update: if isAdmin() && changedOnly(['name']) && nonEmptyString(request.resource.data.name);
+      allow update: if isAdmin() && (editingSettings() || takingInvoiceNumber());
+
+      function editingSettings() {
+        let data = request.resource.data;
+        return changedOnly(['name', 'address', 'currency', 'default_rate_cents', 'billing_increment_minutes', 'default_tax_rate_bp', 'payment_terms_days', 'payment_instructions'])
+          && nonEmptyString(data.name)
+          && optionalString(data.get('address', null))
+          && data.get('currency', 'USD').matches('^[A-Z]{3}$')
+          && data.get('default_rate_cents', 0) is int && data.get('default_rate_cents', 0) >= 0
+          && data.get('billing_increment_minutes', 15) in [1, 6, 15, 30, 60]
+          && data.get('default_tax_rate_bp', 0) is int && data.get('default_tax_rate_bp', 0) >= 0 && data.get('default_tax_rate_bp', 0) <= 10000
+          && data.get('payment_terms_days', 30) is int && data.get('payment_terms_days', 30) >= 0 && data.get('payment_terms_days', 30) <= 365
+          && optionalString(data.get('payment_instructions', null));
+      }
+
+      // Invoice numbers come from this counter, advanced by one in the batch that creates the invoice.
+      function takingInvoiceNumber() {
+        return changedOnly(['next_invoice_number'])
+          && request.resource.data.next_invoice_number == resource.data.get('next_invoice_number', 1) + 1;
+      }
     }
 
     match /users/{uid} {
@@ -211,7 +243,9 @@ service cloud.firestore {
       allow read: if isStaff() || isClientUser(cid);
       // Clients are deactivated rather than deleted, so their history stays intact.
       allow create, update: if isAdmin()
-        && hasExactly(request.resource.data, ['name', 'contact_name', 'email', 'phone', 'address', 'notes', 'active', 'created_at'])
+        && request.resource.data.keys().hasOnly(['name', 'contact_name', 'email', 'phone', 'address', 'notes', 'active', 'created_at', 'hourly_rate_cents'])
+        && request.resource.data.keys().hasAll(['name', 'contact_name', 'email', 'phone', 'address', 'notes', 'active', 'created_at'])
+        && optionalCents(request.resource.data.get('hourly_rate_cents', null))
         && nonEmptyString(request.resource.data.name)
         && optionalString(request.resource.data.contact_name)
         && optionalString(request.resource.data.email)
@@ -296,16 +330,80 @@ service cloud.firestore {
       }
     }
 
-    match /time_entries/{id} {
+    match /invoices/{id} {
       allow read: if isAdmin()
-        || (isStaff() && resource.data.tech_id == request.auth.uid)
+        || (isClientUser(resource.data.client_id) && resource.data.status in ['sent', 'paid', 'void']);
+
+      // Drafts only; numbered from the org's counter, which this same batch advances.
+      allow create: if isAdmin() && validInvoice(request.resource.data)
+        && request.resource.data.status == 'draft'
+        && request.resource.data.number == get(orgPath()).data.get('next_invoice_number', 1)
+        && getAfter(orgPath()).data.next_invoice_number == request.resource.data.number + 1
+        && request.resource.data.created_by == request.auth.uid
+        && request.resource.data.created_at == request.time
+        && request.resource.data.sent_at == null
+        && request.resource.data.paid_at == null
+        && request.resource.data.voided_at == null;
+
+      allow update: if isAdmin() && validInvoice(request.resource.data)
+        && unchanged(['number', 'client_id', 'client_name', 'entry_ids', 'time_lines', 'created_by', 'created_at'])
+        && (editingDraft() || changingStatus());
+
+      // Only drafts can be deleted; a sent invoice is voided instead, so its number stays accounted for.
+      allow delete: if isAdmin() && resource.data.status == 'draft';
+
+      function validInvoice(data) {
+        return hasExactly(data, ['number', 'client_id', 'client_name', 'bill_to', 'issuer', 'currency', 'status', 'period_start', 'period_end', 'issue_date', 'due_date', 'entry_ids', 'time_lines', 'extra_lines', 'tax_rate_bp', 'subtotal_cents', 'tax_cents', 'total_cents', 'notes', 'created_by', 'created_at', 'sent_at', 'paid_at', 'voided_at'])
+          && data.number is int && data.number > 0
+          && data.client_id is string && exists(clientPath(data.client_id))
+          && nonEmptyString(data.client_name)
+          && optionalString(data.bill_to)
+          && data.issuer is map && nonEmptyString(data.issuer.name)
+          && data.currency is string && data.currency.matches('^[A-Z]{3}$')
+          && data.status in ['draft', 'sent', 'paid', 'void']
+          && isDate(data.period_start) && isDate(data.period_end) && data.period_start <= data.period_end
+          && isDate(data.issue_date) && isDate(data.due_date) && data.issue_date <= data.due_date
+          && data.entry_ids is list && data.entry_ids.size() <= 400
+          && data.time_lines is list && data.time_lines.size() == data.entry_ids.size()
+          && data.extra_lines is list && data.extra_lines.size() <= 100
+          && data.tax_rate_bp is int && data.tax_rate_bp >= 0 && data.tax_rate_bp <= 10000
+          && data.subtotal_cents is int && data.tax_cents is int && data.total_cents is int
+          && data.total_cents == data.subtotal_cents + data.tax_cents
+          && optionalString(data.notes);
+      }
+
+      // A draft's dates, extra lines, tax and notes can change until it's sent.
+      function editingDraft() {
+        return resource.data.status == 'draft' && request.resource.data.status == 'draft'
+          && unchanged(['sent_at', 'paid_at', 'voided_at']);
+      }
+
+      // draft -> sent -> paid, paid -> sent (undo), sent -> void. Nothing else changes with it.
+      function changingStatus() {
+        let from = resource.data.status;
+        let to = request.resource.data.status;
+        return changedOnly(['status', 'sent_at', 'paid_at', 'voided_at'])
+          && ((from == 'draft' && to == 'sent' && request.resource.data.sent_at == request.time)
+            || (from == 'sent' && to == 'paid' && request.resource.data.paid_at == request.time)
+            || (from == 'paid' && to == 'sent' && request.resource.data.paid_at == null)
+            || (from == 'sent' && to == 'void' && request.resource.data.voided_at == request.time));
+      }
+    }
+
+    match /time_entries/{id} {
+      // Staff may also look up an entry that doesn't exist yet: a tech's screen starts listening
+      // to their new shift as soon as they clock in, possibly before the server has saved it.
+      allow read: if isAdmin()
+        || (isStaff() && (resource == null || resource.data.tech_id == request.auth.uid))
         || isClientUser(resource.data.client_id);
 
       allow create: if clockIn() || adminManualEntry();
-      allow update: if clockOut() || editOwnNotes() || adminCorrection();
+      allow update: if clockOut() || editOwnNotes() || adminCorrection() || billing() || unbilling();
 
       function validEntry(data) {
-        return hasExactly(data, ['tech_id', 'tech_name', 'client_id', 'client_name', 'task_id', 'ticket_id', 'notes', 'clock_in', 'clock_out', 'edited_by', 'edited_at', 'edit_reason', 'original', 'created_by', 'created_at'])
+        return data.keys().hasOnly(['tech_id', 'tech_name', 'client_id', 'client_name', 'task_id', 'ticket_id', 'notes', 'clock_in', 'clock_out', 'edited_by', 'edited_at', 'edit_reason', 'original', 'created_by', 'created_at', 'invoice_id'])
+          && data.keys().hasAll(['tech_id', 'tech_name', 'client_id', 'client_name', 'task_id', 'ticket_id', 'notes', 'clock_in', 'clock_out', 'edited_by', 'edited_at', 'edit_reason', 'original', 'created_by', 'created_at'])
+
           && data.tech_id is string
           && nonEmptyString(data.tech_name)
           && data.client_id is string && exists(clientPath(data.client_id))
@@ -328,6 +426,7 @@ service cloud.firestore {
           && data.created_at == request.time
           && data.clock_out == null
           && data.edited_by == null && data.edited_at == null && data.edit_reason == null && data.original == null
+          && data.get('invoice_id', null) == null
           && get(clientPath(data.client_id)).data.active == true
           && me().active_entry_id == null
           && getAfter(userPath(request.auth.uid)).data.active_entry_id == id;
@@ -362,7 +461,8 @@ service cloud.firestore {
           && data.edited_by == request.auth.uid
           && data.edited_at == request.time
           && nonEmptyString(data.edit_reason)
-          && data.original == null;
+          && data.original == null
+          && data.get('invoice_id', null) == null;
       }
 
       // An admin corrects an entry (or clocks out a tech who forgot). The first correction
@@ -370,7 +470,9 @@ service cloud.firestore {
       function adminCorrection() {
         let data = request.resource.data;
         return isAdmin() && validEntry(data)
-          && unchanged(['tech_id', 'tech_name', 'created_by', 'created_at'])
+          && unchanged(['tech_id', 'tech_name', 'created_by', 'created_at', 'invoice_id'])
+          // Billed time is locked until its invoice is deleted or voided.
+          && resource.data.get('invoice_id', null) == null
           && data.clock_in <= request.time
           && (data.clock_out == null || data.clock_out <= request.time)
           && data.edited_by == request.auth.uid
@@ -384,6 +486,28 @@ service cloud.firestore {
           // Closing an open entry also takes the tech off the clock, in the same batch.
           && (resource.data.clock_out != null || data.clock_out == null
             || getAfter(userPath(data.tech_id)).data.active_entry_id != id);
+      }
+
+      // Bills a closed entry on an invoice created in this same batch, which must list the entry
+      // and be for the entry's client.
+      function billing() {
+        let invoiceId = request.resource.data.invoice_id;
+        return isAdmin() && changedOnly(['invoice_id'])
+          && resource.data.clock_out != null
+          && resource.data.get('invoice_id', null) == null
+          && invoiceId is string
+          && !exists(invoicePath(invoiceId))
+          && getAfter(invoicePath(invoiceId)).data.client_id == resource.data.client_id
+          && id in getAfter(invoicePath(invoiceId)).data.entry_ids;
+      }
+
+      // Frees an entry when its invoice is deleted (drafts only) or voided, in the same batch.
+      function unbilling() {
+        let invoiceId = resource.data.get('invoice_id', null);
+        return isAdmin() && changedOnly(['invoice_id'])
+          && request.resource.data.invoice_id == null
+          && invoiceId is string
+          && (!existsAfter(invoicePath(invoiceId)) || getAfter(invoicePath(invoiceId)).data.status == 'void');
       }
     }
   }

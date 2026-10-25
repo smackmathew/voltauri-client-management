@@ -3,6 +3,7 @@ import { Badge, buttonClass, Card, Empty, ErrorNote, Field, inputClass, Modal, P
 import { useProfile } from "../context/AuthContext";
 import { useDirectory } from "../context/DirectoryContext";
 import { ClientsApi, type ClientInput } from "../firebase/clients";
+import { formatMoney, parseMoney } from "../lib/billing";
 import { TasksApi, toTask } from "../firebase/tasks";
 import { isClosedStatus, TicketsApi, toTicket } from "../firebase/tickets";
 import { TimeApi, toEntry } from "../firebase/time";
@@ -11,7 +12,7 @@ import type { Client } from "../types";
 
 export default function Clients() {
   const profile = useProfile();
-  const { clients, people } = useDirectory();
+  const { clients, people, org } = useDirectory();
   const isAdmin = profile.role === "admin";
   const [editing, setEditing] = useState<Client | "new" | null>(null);
   const [showInactive, setShowInactive] = useState(false);
@@ -67,6 +68,12 @@ export default function Clients() {
                   {c.address && <p className="whitespace-pre-line">{c.address}</p>}
                 </div>
                 {c.notes && <p className="mt-2 rounded bg-slate-50 p-2 text-xs text-slate-600">{c.notes}</p>}
+                {isAdmin && org && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Rate: <span className="font-medium text-slate-700">{formatMoney(c.hourly_rate_cents ?? org.default_rate_cents, org.currency)}/h</span>
+                    {c.hourly_rate_cents == null && " (company default)"}
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 text-xs">
                   <Badge tone={openTickets ? "amber" : "slate"}>{openTickets} open tickets</Badge>
                   <Badge tone={openTasks ? "blue" : "slate"}>{openTasks} open tasks</Badge>
@@ -94,7 +101,10 @@ function ClientForm({ client, onClose }: { client: Client | null; onClose: () =>
     address: client?.address ?? "",
     notes: client?.notes ?? "",
     active: client?.active ?? true,
+    hourly_rate_cents: client?.hourly_rate_cents ?? null,
   });
+  const { org } = useDirectory();
+  const [rate, setRate] = useState(client?.hourly_rate_cents != null ? (client.hourly_rate_cents / 100).toFixed(2) : "");
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const set = (key: keyof ClientInput) => (e: { target: { value: string } }) => setForm({ ...form, [key]: e.target.value });
@@ -102,9 +112,10 @@ function ClientForm({ client, onClose }: { client: Client | null; onClose: () =>
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
+    const input = { ...form, hourly_rate_cents: parseMoney(rate) };
     try {
-      if (client) await ClientsApi.update(client.id, form);
-      else await ClientsApi.create(form);
+      if (client) await ClientsApi.update(client.id, input);
+      else await ClientsApi.create(input);
       onClose();
     } catch (err) {
       setError(err);
@@ -131,6 +142,12 @@ function ClientForm({ client, onClose }: { client: Client | null; onClose: () =>
         </Field>
         <Field label="Address">
           <textarea className={inputClass} rows={2} value={form.address ?? ""} onChange={set("address")} />
+        </Field>
+        <Field
+          label="Hourly rate"
+          hint={`Leave blank to use the company default${org ? ` (${formatMoney(org.default_rate_cents, org.currency)}/h)` : ""}. New invoices use the rate in effect when they're created.`}
+        >
+          <input className={inputClass} inputMode="decimal" placeholder="e.g. 125.00" value={rate} onChange={(e) => setRate(e.target.value)} />
         </Field>
         <Field label="Notes" hint="Visible to the client's own users too.">
           <textarea className={inputClass} rows={3} value={form.notes ?? ""} onChange={set("notes")} />

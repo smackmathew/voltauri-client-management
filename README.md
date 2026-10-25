@@ -1,7 +1,7 @@
 # Tauri Operations Dashboard
 
 One place for Tauri to run its client work: **clients**, **employees**, **tasks**, **help desk
-requests** and a **time clock**. Techs clock in and out against a client, and the hours show up
+requests**, a **time clock** and **billing**. Techs clock in and out against a client, and the hours show up
 on Tauri's screens and on that client's screens the moment they punch, with no refresh. That's
 the accountability: everyone looks at the same live record.
 
@@ -16,6 +16,7 @@ the accountability: everyone looks at the same live record.
 | Help desk | All tickets, assign, internal notes | All tickets, assign, internal notes | Open tickets for their company, reply, close/reopen. Never sees internal notes |
 | Clients | Add, edit, deactivate | View | — |
 | Team | Invite people, change roles, deactivate accounts | — | — |
+| Billing | Rates, unbilled time, create/send invoices, mark paid, void | — | Their invoices once sent, balance due, print/PDF and CSV |
 
 Each row is enforced by the Firestore security rules (`firestore.rules`), not just hidden in the
 UI. A client user can't read another client's tickets or time even by calling the database directly.
@@ -33,6 +34,27 @@ UI. A client user can't read another client's tickets or time even by calling th
 - **Nothing is deleted.** Time entries can't be deleted by anyone.
 - Each entry can link to a help desk ticket and a task, so the client sees what the time was for.
   Each ticket page totals the time logged against it.
+
+## Billing
+
+- **Rates.** Set a default hourly rate in **Billing → Billing settings**. A client can have its own
+  rate (Clients → Edit), which takes precedence.
+- **Rounding.** Each shift is billed rounded up to the billing increment (15 minutes by default;
+  1, 6, 30 or 60 also available), with one increment as the minimum. The invoice shows both the
+  time worked and the time billed.
+- **Invoices.** **Billing** lists each client's finished, unbilled shifts for a period. **Create
+  invoice** lets you untick any shift you don't want to bill (an accidental punch, say) and makes a
+  draft. On the draft you can add other charges (parts, licences, flat fees), set tax, dates and
+  notes, then **Mark as sent**. The client sees it in their portal straight away. **Mark paid**
+  when the money arrives. Invoices are numbered INV-0001, INV-0002, … with no gaps or repeats.
+- **Getting it to the client.** The app doesn't send email. Clients see sent invoices under
+  **Invoices** in their portal, and **Print / PDF** gives you a file to email.
+- **No double billing, no quiet edits.** A shift can be on only one invoice. While it's on one,
+  nobody can correct it; to change billed time, delete the draft or void the invoice, which puts
+  its shifts back in the unbilled list. A sent invoice can't be edited or deleted, only voided, so
+  every number stays accounted for. Each invoice keeps the rates, client address and your company
+  details it was made with, so later changes don't rewrite old invoices.
+- Amounts are stored as whole cents. Tax is a single percentage on the subtotal.
 
 ## Stack
 
@@ -80,11 +102,15 @@ npm test
 
 This starts the emulators and checks the security rules and data layer: sign-up and invites,
 role separation, the time clock guarantees above, help desk privacy (internal notes, one client
-can't see another's tickets) and tasks. GitHub Actions runs it on every push.
+can't see another's tickets), tasks, and billing (rates and rounding, sequential numbering, no
+double billing, billed time locked, clients seeing only their own sent invoices). GitHub Actions runs it on every push.
 
 ## Possible next steps
 
-- Billing: hourly rates per client or tech, and invoices built from the timesheets.
-- Email or SMS notifications for new tickets and replies (this needs Cloud Functions, so the Blaze plan).
+- Online payment (e.g. a Stripe payment link on each invoice), and emailing invoices automatically.
+- Different rates per technician or type of work, and non-billable time.
+- Email or SMS notifications for new tickets and replies.
+
+(The email, SMS and payment items need Cloud Functions, so the Blaze plan.)
 - A desktop build with the [Tauri](https://tauri.app) framework, if you want a native app for techs.
   The web app would run inside it unchanged.

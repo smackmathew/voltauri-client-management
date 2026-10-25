@@ -1,8 +1,9 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { orgDoc, toOrganization } from "../firebase/account";
 import { ClientsApi, toClient } from "../firebase/clients";
 import { TeamApi } from "../firebase/team";
 import { useLiveDoc, useLiveQuery } from "../lib/useLive";
-import type { Client, Profile } from "../types";
+import type { Client, Organization, Profile } from "../types";
 import { useProfile } from "./AuthContext";
 
 interface Directory {
@@ -13,6 +14,8 @@ interface Directory {
   staff: Profile[];
   /** Everyone with an account. Empty for client users. */
   people: Profile[];
+  /** The company and its billing settings. */
+  org: Organization | null;
   loading: boolean;
 }
 
@@ -27,6 +30,7 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
   const allClients = useLiveQuery(isStaff ? ClientsApi.allQuery() : null, toClient, key);
   const ownClient = useLiveDoc(!isStaff && profile.client_id ? ClientsApi.clientDoc(profile.client_id) : null, toClient, key);
   const people = useLiveQuery(isStaff ? TeamApi.peopleQuery() : null, TeamApi.toProfile, key);
+  const org = useLiveDoc(orgDoc(), toOrganization, key);
 
   const value = useMemo<Directory>(() => {
     const clients = isStaff ? allClients.data : ownClient.data ? [ownClient.data] : [];
@@ -37,9 +41,10 @@ export function DirectoryProvider({ children }: { children: ReactNode }) {
       clientName: (id) => (id ? byId.get(id) ?? "Unknown client" : "—"),
       staff: sortedPeople.filter((p) => p.role !== "client" && p.active),
       people: sortedPeople,
-      loading: allClients.loading || ownClient.loading || people.loading,
+      org: org.data,
+      loading: allClients.loading || ownClient.loading || people.loading || org.loading,
     };
-  }, [isStaff, allClients, ownClient, people]);
+  }, [isStaff, allClients, ownClient, people, org]);
 
   return <DirectoryContext.Provider value={value}>{children}</DirectoryContext.Provider>;
 }

@@ -36,6 +36,7 @@ export const toEntry: Mapper<TimeEntry> = (snap) => {
           client_id: data.original.client_id,
         }
       : null,
+    invoice_id: data.invoice_id ?? null,
   };
 };
 
@@ -90,6 +91,7 @@ export const TimeApi = {
       edited_at: null,
       edit_reason: null,
       original: null,
+      invoice_id: null,
       created_by: tech.id,
       created_at: serverTimestamp(),
     });
@@ -161,6 +163,7 @@ export const TimeApi = {
       edited_at: serverTimestamp(),
       edit_reason: reason.trim(),
       original: null,
+      invoice_id: null,
       created_by: admin.id,
       created_at: serverTimestamp(),
     });

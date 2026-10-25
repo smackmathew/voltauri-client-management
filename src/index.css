@@ -11,3 +11,28 @@ body {
 .grid > * {
   min-width: 0;
 }
+
+/* Printing an invoice (Print / PDF) shows just the invoice. */
+@page {
+  margin: 16mm;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body,
+  .min-h-screen {
+    background: white !important;
+  }
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .invoice-sheet {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+}

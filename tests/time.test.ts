@@ -38,6 +38,13 @@ describe("time clock", () => {
     expect(entryDuration(entry)).toBeGreaterThan(0);
   });
 
+  it("lets a tech look up a shift the server hasn't saved yet", async () => {
+    // Their screen starts listening to a new shift as soon as they clock in, which can be
+    // before the server has it; that read must not be refused.
+    await signInAs(s.tech);
+    expect((await getDoc(TimeApi.entryDoc("not-saved-yet"))).exists()).toBe(false);
+  });
+
   it("allows only one open shift per tech", async () => {
     const tech = await signInAs(s.tech);
     await TimeApi.clockIn(tech, { client: s.acme });

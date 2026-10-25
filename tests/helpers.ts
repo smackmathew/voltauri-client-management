@@ -62,6 +62,7 @@ export async function createClient(admin: TestUser, name: string): Promise<Pick<
     address: null,
     notes: null,
     active: true,
+    hourly_rate_cents: null,
   });
   return { id, name };
 }
