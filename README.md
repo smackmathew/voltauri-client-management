@@ -65,24 +65,73 @@ Cloud Functions, so the free **Spark** plan is enough.
 
 ## Putting it online
 
-1. In the [Firebase console](https://console.firebase.google.com), create a project for Tauri (separate
-   from the household app's), then:
-   - **Authentication** → Get started → **Email/Password** → enable.
-   - **Firestore Database** → Create database (production mode; the rules come from this folder).
-   - **Project settings** → General → Your apps → add a **Web app** and copy its config values.
-2. Copy `.env.example` to `.env.local` and fill in those values.
-3. Deploy from this folder:
-   ```bash
-   npm ci
-   npx firebase login
-   npx firebase use --add          # pick the Tauri project
-   npx firebase deploy             # builds the site, deploys rules, indexes and hosting
-   ```
-4. Open the site, choose **First time? Set up Tauri** and create your account. The first account
+First, in the [Firebase console](https://console.firebase.google.com), create a project for Tauri
+(separate from the household app's), then:
+
+- **Authentication** → Get started → **Email/Password** → enable.
+- **Firestore Database** → Create database (production mode; the rules come from this folder).
+- **Hosting** → Get started → click through the steps (no need to run the commands it shows).
+- **Project settings** → General → Your apps → add a **Web app** and copy its config values:
+  `apiKey`, `authDomain`, `projectId` and `appId`.
+
+Then deploy from GitHub (nothing to install) or from your own computer.
+
+### Deploying from GitHub
+
+GitHub Actions deploys the app for you (`.github/workflows/deploy-tauri-dashboard.yml`): every
+time a change to `tauri-dashboard/` lands on the default branch, it runs the tests and, if they
+pass, deploys the website, security rules and indexes. You can also start it by hand. One-time setup:
+
+1. **Give GitHub a key to your Firebase project.** In the Firebase console go to ⚙️ **Project
+   settings** → **Service accounts** → **Manage service account permissions** (opens Google Cloud).
+   - **+ Create service account**, name it `github-deploy`, **Create and continue**.
+   - Grant it the roles **Firebase Admin** and **Service Usage Consumer**, then **Done**.
+   - Open `github-deploy` → **Keys** → **Add key** → **Create new key** → **JSON**. A `.json` file
+     downloads. Treat it like a password: anyone with it can change your Firebase project.
+2. **Add the settings to the repository.** On GitHub: the repository → **Settings** → **Secrets and
+   variables** → **Actions**.
+   - **Secrets** tab → **New repository secret**: name `FIREBASE_SERVICE_ACCOUNT`, value: the whole
+     contents of the `.json` file. Then delete the file from your computer.
+   - **Variables** tab → **New repository variable**, four times, with the web app's config values:
+
+     | Name | Value |
+     | --- | --- |
+     | `FIREBASE_PROJECT_ID` | `projectId`, e.g. `tauri-cms-1a2b3` |
+     | `FIREBASE_API_KEY` | `apiKey` |
+     | `FIREBASE_AUTH_DOMAIN` | `authDomain`, e.g. `tauri-cms-1a2b3.firebaseapp.com` |
+     | `FIREBASE_APP_ID` | `appId` |
+
+     These four aren't secret (they're built into the website for every browser), which is why
+     they're variables rather than secrets.
+3. **Deploy.** The repository → **Actions** → **Deploy Tauri dashboard** → **Run workflow**. It takes
+   about three minutes. The run's summary shows the site's address: `https://<project-id>.web.app`.
+
+From then on, merging a change deploys it. Until the secret and variables are set, the workflow
+skips the deploy and says what's missing. If a deploy fails with a permission error, the log names
+the missing permission; add the matching role to `github-deploy` in Google Cloud.
+
+### Deploying from your computer
+
+You need Node.js 22. In this folder:
+
+```bash
+cp .env.example .env.local      # then fill in the web app's config values
+npm ci
+npx firebase login
+npx firebase use --add          # pick the Tauri project
+npx firebase deploy             # builds the site, deploys rules, indexes and hosting
+```
+
+### First sign-in
+
+1. Open the site, choose **First time? Set up Tauri** and create your account. The first account
    becomes the admin; nobody else can do this step afterwards.
-5. On **Clients**, add your clients. On **Team** → **Invite someone**, create an invite code for each
+2. In **Billing → Billing settings**, set your default hourly rate, tax and payment details.
+3. On **Clients**, add your clients. On **Team** → **Invite someone**, create an invite code for each
    tech (role: Technician) and each client contact (role: Client portal user, plus their company).
    They sign up with **I have an invite code**. A code works once, and can be locked to one email.
+   Leave sign-ups turned on in Firebase Authentication: people need them to redeem their invites,
+   and an account made without an invite can't see anything.
 
 ## Developing locally
 
