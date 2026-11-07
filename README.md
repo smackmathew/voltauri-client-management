@@ -101,7 +101,8 @@ rules and indexes. You can also start it by hand. One-time setup:
      | `FIREBASE_APP_ID` | `appId` |
 
      These four aren't secret (they're built into the website for every browser), which is why
-     they're variables rather than secrets.
+     they're variables rather than secrets, but the deploy accepts them on either tab.
+     `FIREBASE_AUTH_DOMAIN` can be left out if it's the usual `<project-id>.firebaseapp.com`.
 3. **Deploy.** The repository → **Actions** → **Deploy Tauri dashboard** → **Run workflow**. It takes
    about three minutes. The run's summary shows the site's address: `https://<project-id>.web.app`.
 

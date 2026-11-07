@@ -25,16 +25,14 @@ jobs:
         id: settings
         env:
           HAS_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
-          PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
-          API_KEY: ${{ vars.FIREBASE_API_KEY }}
-          AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
-          APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID }}
+          API_KEY: ${{ vars.FIREBASE_API_KEY || secrets.FIREBASE_API_KEY }}
+          APP_ID: ${{ vars.FIREBASE_APP_ID || secrets.FIREBASE_APP_ID }}
         run: |
           missing=""
           [ "$HAS_SERVICE_ACCOUNT" = "true" ] || missing="$missing secret FIREBASE_SERVICE_ACCOUNT,"
           [ -n "$PROJECT_ID" ] || missing="$missing variable FIREBASE_PROJECT_ID,"
           [ -n "$API_KEY" ] || missing="$missing variable FIREBASE_API_KEY,"
-          [ -n "$AUTH_DOMAIN" ] || missing="$missing variable FIREBASE_AUTH_DOMAIN,"
           [ -n "$APP_ID" ] || missing="$missing variable FIREBASE_APP_ID,"
           if [ -n "$missing" ]; then
             echo "::warning title=Not deployed::Add these under Settings > Secrets and variables > Actions:${missing%,}. See README.md, Deploying from GitHub."
@@ -73,13 +71,15 @@ jobs:
         if: steps.settings.outputs.ready == 'true'
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID }}
           # Built into the website by the predeploy build. Not secrets: they ship to every browser.
-          VITE_FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          VITE_FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY || secrets.FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN || secrets.FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID || secrets.FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID || secrets.FIREBASE_APP_ID }}
         run: |
+          # Firebase's auth domain is always <project-id>.firebaseapp.com unless it's been customised.
+          export VITE_FIREBASE_AUTH_DOMAIN="${VITE_FIREBASE_AUTH_DOMAIN:-$FIREBASE_PROJECT_ID.firebaseapp.com}"
           key_file="$RUNNER_TEMP/firebase-service-account.json"
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$key_file"
           export GOOGLE_APPLICATION_CREDENTIALS="$key_file"
