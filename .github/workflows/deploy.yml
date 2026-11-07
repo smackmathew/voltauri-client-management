@@ -1,0 +1,87 @@
+name: Deploy
+
+# Builds the app and deploys it to Firebase (the website, the Firestore security rules and the
+# indexes) whenever the default branch changes, or when started by hand from the Actions tab.
+# Setup is in README.md under "Deploying from GitHub".
+on:
+  push:
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits for the running one instead of racing it.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only the default branch is ever deployed.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    steps:
+      # Until the repository has the settings below, skip the deploy with a note rather than fail.
+      - name: Check deploy settings
+        id: settings
+        env:
+          HAS_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+          PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
+          APP_ID: ${{ vars.FIREBASE_APP_ID }}
+        run: |
+          missing=""
+          [ "$HAS_SERVICE_ACCOUNT" = "true" ] || missing="$missing secret FIREBASE_SERVICE_ACCOUNT,"
+          [ -n "$PROJECT_ID" ] || missing="$missing variable FIREBASE_PROJECT_ID,"
+          [ -n "$API_KEY" ] || missing="$missing variable FIREBASE_API_KEY,"
+          [ -n "$AUTH_DOMAIN" ] || missing="$missing variable FIREBASE_AUTH_DOMAIN,"
+          [ -n "$APP_ID" ] || missing="$missing variable FIREBASE_APP_ID,"
+          if [ -n "$missing" ]; then
+            echo "::warning title=Not deployed::Add these under Settings > Secrets and variables > Actions:${missing%,}. See README.md, Deploying from GitHub."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.settings.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.settings.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      # The tests run the Firebase emulators, which need Java.
+      - uses: actions/setup-java@v4
+        if: steps.settings.outputs.ready == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install
+        if: steps.settings.outputs.ready == 'true'
+        run: npm ci
+
+      # Never deploy rules or code that fail their tests. (They use the emulators' demo project,
+      # so the real project's settings are deliberately not set until the deploy step.)
+      - name: Test
+        if: steps.settings.outputs.ready == 'true'
+        run: npm test
+
+      - name: Deploy to Firebase
+        if: steps.settings.outputs.ready == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          # Built into the website by the predeploy build. Not secrets: they ship to every browser.
+          VITE_FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+        run: |
+          key_file="$RUNNER_TEMP/firebase-service-account.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$key_file"
+          export GOOGLE_APPLICATION_CREDENTIALS="$key_file"
+          npx firebase deploy --only hosting,firestore --project "$FIREBASE_PROJECT_ID" --non-interactive
+          echo "### Deployed to https://$FIREBASE_PROJECT_ID.web.app" >> "$GITHUB_STEP_SUMMARY"

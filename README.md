@@ -58,18 +58,17 @@ UI. A client user can't read another client's tickets or time even by calling th
 
 ## Stack
 
-Same as the household app in this repo: React + TypeScript (Vite) and Tailwind, on Firebase
-(Authentication for sign-in, Cloud Firestore for data, Hosting for the site). Every screen
+React + TypeScript (Vite) and Tailwind, on Firebase (Authentication for sign-in, Cloud Firestore for data, Hosting for the site). Every screen
 subscribes to Firestore live (`onSnapshot`), which is what makes updates instant. There are no
 Cloud Functions, so the free **Spark** plan is enough.
 
 ## Putting it online
 
-First, in the [Firebase console](https://console.firebase.google.com), create a project for Tauri
-(separate from the household app's), then:
+First, in the [Firebase console](https://console.firebase.google.com), create a project for Tauri,
+then:
 
 - **Authentication** → Get started → **Email/Password** → enable.
-- **Firestore Database** → Create database (production mode; the rules come from this folder).
+- **Firestore Database** → Create database (production mode; the rules come from this repository).
 - **Hosting** → Get started → click through the steps (no need to run the commands it shows).
 - **Project settings** → General → Your apps → add a **Web app** and copy its config values:
   `apiKey`, `authDomain`, `projectId` and `appId`.
@@ -78,9 +77,9 @@ Then deploy from GitHub (nothing to install) or from your own computer.
 
 ### Deploying from GitHub
 
-GitHub Actions deploys the app for you (`.github/workflows/deploy-tauri-dashboard.yml`): every
-time a change to `tauri-dashboard/` lands on the default branch, it runs the tests and, if they
-pass, deploys the website, security rules and indexes. You can also start it by hand. One-time setup:
+GitHub Actions deploys the app for you (`.github/workflows/deploy.yml`): every time a change
+lands on the default branch, it runs the tests and, if they pass, deploys the website, security
+rules and indexes. You can also start it by hand. One-time setup:
 
 1. **Give GitHub a key to your Firebase project.** In the Firebase console go to ⚙️ **Project
    settings** → **Service accounts** → **Manage service account permissions** (opens Google Cloud).
@@ -112,7 +111,7 @@ the missing permission; add the matching role to `github-deploy` in Google Cloud
 
 ### Deploying from your computer
 
-You need Node.js 22. In this folder:
+You need Node.js 22. In this repository:
 
 ```bash
 cp .env.example .env.local      # then fill in the web app's config values
