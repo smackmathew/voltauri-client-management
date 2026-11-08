@@ -10,6 +10,17 @@ export interface Profile {
   active: boolean;
   /** The open time entry while this person is on the clock. */
   active_entry_id: string | null;
+  phone: string | null;
+  job_title: string | null;
+  /** YYYY-MM-DD */
+  start_date: string | null;
+}
+
+/** An employee's details only admins can see. */
+export interface EmployeePrivate {
+  /** Hourly pay, for labor cost. */
+  pay_rate_cents: number | null;
+  notes: string | null;
 }
 
 export interface BillingSettings {

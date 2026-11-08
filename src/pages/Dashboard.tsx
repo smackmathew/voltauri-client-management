@@ -7,7 +7,7 @@ import { useDirectory } from "../context/DirectoryContext";
 import { TasksApi, toTask } from "../firebase/tasks";
 import { isClosedStatus, TicketsApi, toTicket } from "../firebase/tickets";
 import { entryDuration, TimeApi, toEntry } from "../firebase/time";
-import { addDays, formatHours, isoDay, shortId, startOfMonth, startOfWeek, timeAgo } from "../lib/format";
+import { addDays, firstName, formatHours, isoDay, shortId, startOfMonth, startOfWeek, timeAgo } from "../lib/format";
 import {
   PRIORITY_LABELS,
   PRIORITY_ORDER,
@@ -50,7 +50,7 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader
-        title={`${greeting}, ${profile.full_name.split(" ")[0]}`}
+        title={`${greeting}, ${firstName(profile.full_name)}`}
         subtitle={isClient ? `Live view of the work Voltauri is doing for ${clients[0]?.name ?? "you"}.` : "Everything happening across Voltauri, live."}
         actions={
           <Link to="/helpdesk?new=1" className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700">

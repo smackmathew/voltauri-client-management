@@ -3,7 +3,9 @@ import EntryTable from "../components/EntryTable";
 import { buttonClass, Card, ErrorNote, Field, inputClass, LiveDot, Modal, PageHeader, StatCard } from "../components/ui";
 import { useProfile } from "../context/AuthContext";
 import { useDirectory } from "../context/DirectoryContext";
+import { TeamApi } from "../firebase/team";
 import { entryDuration, TimeApi, toEntry } from "../firebase/time";
+import { billableMinutes, formatMoney, lineAmount, rateFor } from "../lib/billing";
 import { downloadCsv } from "../lib/csv";
 import { addDays, formatHours, isoDay, startOfMonth, startOfWeek, toLocalInput } from "../lib/format";
 import { useLiveQuery, useNow } from "../lib/useLive";
@@ -30,7 +32,7 @@ function presetRange(preset: Preset, now: Date): [Date, Date] {
 
 export default function Timesheets() {
   const profile = useProfile();
-  const { clients, staff } = useDirectory();
+  const { clients, staff, org } = useDirectory();
   const now = useNow(60_000);
   const isAdmin = profile.role === "admin";
 
@@ -62,6 +64,32 @@ export default function Timesheets() {
 
   const total = entries.reduce((sum, e) => sum + entryDuration(e, now), 0);
   const byTech = totals(entries, (e) => e.tech_name, now);
+
+  // Admins: what this time cost in pay, what it bills at client rates, and the difference.
+  const privateDocs = useLiveQuery(
+    isAdmin ? TeamApi.privateQuery() : null,
+    (snap) => ({ id: snap.id, pay: TeamApi.toPrivate(snap).pay_rate_cents }),
+    `sheet-pay:${profile.id}:${isAdmin}`,
+  );
+  const money = useMemo(() => {
+    const pay = new Map(privateDocs.data.map((d) => [d.id, d.pay]));
+    const clientById = new Map(clients.map((c) => [c.id, c]));
+    const costByTech = new Map<string, number>();
+    const unpaid = new Set<string>();
+    let cost = 0;
+    let billable = 0;
+    for (const e of entries) {
+      const ms = entryDuration(e, now);
+      const rate = pay.get(e.tech_id);
+      if (rate == null) unpaid.add(e.tech_name);
+      const c = Math.round((ms / 3_600_000) * (rate ?? 0));
+      cost += c;
+      costByTech.set(e.tech_name, (costByTech.get(e.tech_name) ?? 0) + c);
+      if (org) billable += lineAmount(billableMinutes(ms, org.billing_increment_minutes), rateFor(clientById.get(e.client_id), org));
+    }
+    return { cost, billable, margin: billable - cost, costByTech, unpaid: [...unpaid] };
+  }, [privateDocs.data, clients, entries, now, org]);
+  const currency = org?.currency ?? "USD";
   const byClient = totals(entries, (e) => e.client_name, now);
   const edited = entries.filter((e) => e.edit_reason).length;
   const techNames = Array.from(new Map(data.map((e) => [e.tech_id, e.tech_name])).entries()).sort((a, b) => a[1].localeCompare(b[1]));
@@ -161,6 +189,27 @@ export default function Timesheets() {
         <StatCard label="Edited by admin" value={edited} tone={edited ? "warning" : "default"} hint="Every correction keeps its reason" />
       </div>
 
+      {isAdmin && (
+        <div className="mb-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatCard label="Labor cost" value={formatMoney(money.cost, currency)} hint="Hours worked × each tech's pay rate" />
+            <StatCard label="Billable value" value={formatMoney(money.billable, currency)} hint="At client rates, with billing rounding" />
+            <StatCard
+              label="Margin"
+              value={formatMoney(money.margin, currency)}
+              tone={money.margin < 0 ? "negative" : money.billable > 0 ? "positive" : "default"}
+              hint={money.billable > 0 ? `${Math.round((money.margin / money.billable) * 100)}% of billable value` : undefined}
+            />
+          </div>
+          {money.unpaid.length > 0 && (
+            <p className="mt-2 text-xs text-amber-700">
+              No pay rate set for {money.unpaid.join(", ")}, so their time counts as $0 labor cost. Set it on the Team page.
+            </p>
+          )}
+          <p className="mt-1 text-xs text-slate-400">Only admins see these figures.</p>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-4">
         <div className="lg:col-span-3">
           <Card title="Entries">
@@ -176,7 +225,13 @@ export default function Timesheets() {
           </Card>
         </div>
         <div className="space-y-6">
-          {profile.role !== "tech" && <Totals title="By technician" rows={byTech} />}
+          {profile.role !== "tech" && (
+            <Totals
+              title="By technician"
+              rows={byTech}
+              detail={isAdmin ? (name) => `${formatMoney(money.costByTech.get(name) ?? 0, currency)} labor` : undefined}
+            />
+          )}
           {profile.role !== "client" && <Totals title="By client" rows={byClient} />}
         </div>
       </div>
@@ -193,7 +248,7 @@ function totals(entries: TimeEntry[], keyOf: (e: TimeEntry) => string, now: Date
   return [...map.entries()].sort((a, b) => b[1] - a[1]);
 }
 
-function Totals({ title, rows }: { title: string; rows: [string, number][] }) {
+function Totals({ title, rows, detail }: { title: string; rows: [string, number][]; detail?: (name: string) => string }) {
   const max = Math.max(1, ...rows.map(([, ms]) => ms));
   return (
     <Card title={title}>
@@ -210,6 +265,7 @@ function Totals({ title, rows }: { title: string; rows: [string, number][] }) {
               <div className="mt-1 h-1.5 rounded-full bg-slate-100">
                 <div className="h-1.5 rounded-full bg-brand-500" style={{ width: `${(ms / max) * 100}%` }} />
               </div>
+              {detail && <p className="mt-1 text-xs text-slate-500">{detail(name)}</p>}
             </li>
           ))}
         </ul>
