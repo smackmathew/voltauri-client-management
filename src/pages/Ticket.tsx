@@ -201,7 +201,7 @@ function Reply({ ticket }: { ticket: TicketType }) {
         rows={3}
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        placeholder={isStaff ? (internal ? "Internal note — only Tauri staff see this" : "Reply to the client…") : "Add a reply…"}
+        placeholder={isStaff ? (internal ? "Internal note — only Voltauri staff see this" : "Reply to the client…") : "Add a reply…"}
       />
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         {isStaff ? (

@@ -12,7 +12,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [inviteCode, setInviteCode] = useState("");
-  const [orgName, setOrgName] = useState("Tauri");
+  const [orgName, setOrgName] = useState("Voltauri");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -45,7 +45,7 @@ export default function Login() {
 
   const heading = needsProfile
     ? "Finish joining"
-    : { signin: "Sign in", join: "Join with an invite", setup: "Set up Tauri" }[mode];
+    : { signin: "Sign in", join: "Join with an invite", setup: "Set up Voltauri" }[mode];
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 via-white to-slate-100 px-4">
@@ -106,7 +106,7 @@ export default function Login() {
             {needsProfile ? (
               <>
                 <button type="button" className={buttonClass.link} onClick={() => setMode(mode === "setup" ? "join" : "setup")}>
-                  {mode === "setup" ? "I have an invite code" : "First account? Set up Tauri"}
+                  {mode === "setup" ? "I have an invite code" : "First account? Set up Voltauri"}
                 </button>
                 <button type="button" className="text-slate-500 hover:text-slate-700" onClick={logout}>
                   Sign out
@@ -126,7 +126,7 @@ export default function Login() {
                 )}
                 {mode !== "setup" && (
                   <button type="button" className="text-slate-500 hover:text-slate-700" onClick={() => setMode("setup")}>
-                    First time? Set up Tauri
+                    First time? Set up Voltauri
                   </button>
                 )}
               </>

@@ -92,7 +92,7 @@ export default function Timesheets() {
         title="Timesheets"
         subtitle={
           <span className="flex items-center gap-2">
-            {profile.role === "client" ? "Every hour Tauri has worked for you." : profile.role === "tech" ? "Your recorded hours." : "Hours across the whole team."}
+            {profile.role === "client" ? "Every hour Voltauri has worked for you." : profile.role === "tech" ? "Your recorded hours." : "Hours across the whole team."}
             <LiveDot />
           </span>
         }

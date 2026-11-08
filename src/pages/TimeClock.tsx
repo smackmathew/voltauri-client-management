@@ -18,7 +18,7 @@ export default function TimeClock() {
 
   return (
     <div>
-      <PageHeader title="Time Clock" subtitle="Clock in when you start work for a client and out when you stop. Tauri and the client see it instantly." />
+      <PageHeader title="Time Clock" subtitle="Clock in when you start work for a client and out when you stop. Voltauri and the client see it instantly." />
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-2">
           <ClockPanel />

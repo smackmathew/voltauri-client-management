@@ -7,7 +7,7 @@ import { useLiveQuery } from "../lib/useLive";
 import { InvoiceTable } from "./Billing";
 import { invoiceState } from "./invoiceStatus";
 
-/** A client's view of the invoices Tauri has sent them. */
+/** A client's view of the invoices Voltauri has sent them. */
 export default function Invoices() {
   const profile = useProfile();
   const { org } = useDirectory();
@@ -20,7 +20,7 @@ export default function Invoices() {
 
   return (
     <div>
-      <PageHeader title="Invoices" subtitle={<span className="flex items-center gap-2">Every invoice from {org?.name ?? "Tauri"}, with the time behind it. <LiveDot /></span>} />
+      <PageHeader title="Invoices" subtitle={<span className="flex items-center gap-2">Every invoice from {org?.name ?? "Voltauri"}, with the time behind it. <LiveDot /></span>} />
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard label="Balance due" value={formatMoney(sum(due), currency)} hint={`${due.length} unpaid`} />
         <StatCard label="Overdue" value={formatMoney(sum(overdue), currency)} tone={overdue.length ? "negative" : "default"} />

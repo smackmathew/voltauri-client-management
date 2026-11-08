@@ -64,7 +64,7 @@ export default function HelpDesk() {
     <div>
       <PageHeader
         title="Help Desk"
-        subtitle={<span className="flex items-center gap-2">{isStaff ? "Requests from every client." : "Your requests to Tauri support."} <LiveDot /></span>}
+        subtitle={<span className="flex items-center gap-2">{isStaff ? "Requests from every client." : "Your requests to Voltauri support."} <LiveDot /></span>}
         actions={
           <button className={buttonClass.primary} onClick={() => setParams({ new: "1" })}>
             New request

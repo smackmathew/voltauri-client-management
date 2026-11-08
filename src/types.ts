@@ -156,7 +156,7 @@ export interface Invoice {
   client_name: string;
   /** The client's address and contact, as of when the invoice was made. */
   bill_to: string | null;
-  /** Tauri's name, address and payment details, as of when the invoice was made. */
+  /** Voltauri's name, address and payment details, as of when the invoice was made. */
   issuer: { name: string; address: string | null; payment_instructions: string | null };
   currency: string;
   status: InvoiceStatus;

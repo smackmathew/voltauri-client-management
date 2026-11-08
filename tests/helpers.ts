@@ -37,7 +37,7 @@ export async function signInAs(user: TestUser): Promise<Profile> {
 
 export async function signUpFounder(fullName = "Olivia Owner"): Promise<TestUser> {
   const email = newEmail("owner");
-  const profile = await AccountApi.signup({ full_name: fullName, email, password: PASSWORD, org_name: "Tauri" });
+  const profile = await AccountApi.signup({ full_name: fullName, email, password: PASSWORD, org_name: "Voltauri" });
   return { email, profile };
 }
 
