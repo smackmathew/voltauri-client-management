@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import { useAuth, useProfile } from "../context/AuthContext";
 import { DirectoryProvider } from "../context/DirectoryContext";
 import { ROLE_LABELS } from "../lib/labels";
@@ -36,10 +36,9 @@ export default function Layout() {
         <header className="no-print sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
             <div className="flex items-center gap-6">
-              <span className="flex items-center gap-2 text-lg font-semibold text-brand-700">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">T</span>
-                Tauri
-              </span>
+              <Link to="/" className="shrink-0">
+                <img src="/voltauri-logo.png" alt="Voltauri" className="h-7 w-auto" />
+              </Link>
               <nav className="hidden gap-1 lg:flex">
                 {items.map((item) => (
                   <NavLink key={item.to} to={item.to} end={item.end} className={link(false)}>

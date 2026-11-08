@@ -51,8 +51,10 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 via-white to-slate-100 px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
-          <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-xl font-bold text-white shadow">T</span>
-          <h1 className="mt-3 text-2xl font-semibold text-slate-900">Tauri Operations</h1>
+          <h1>
+            <img src="/voltauri-logo.png" alt="Voltauri" className="mx-auto h-12 w-auto" />
+          </h1>
+          <p className="mt-4 text-lg font-semibold text-slate-800">Operations dashboard</p>
           <p className="text-sm text-slate-500">Clients, tasks, help desk and time — live for your team and your clients.</p>
         </div>
         <form onSubmit={submit} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
