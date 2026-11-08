@@ -82,7 +82,7 @@ export default function ClockPanel() {
       <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">On the clock</p>
-          <LiveDot label="Visible to Tauri and the client" />
+          <LiveDot label="Visible to Voltauri and the client" />
         </div>
         <p className="mt-3 text-5xl font-semibold tabular-nums text-slate-900">{formatClock(entryDuration(entry, now))}</p>
         <p className="mt-2 text-sm text-slate-600">

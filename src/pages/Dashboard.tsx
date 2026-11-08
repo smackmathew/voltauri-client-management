@@ -51,7 +51,7 @@ export default function Dashboard() {
     <div>
       <PageHeader
         title={`${greeting}, ${profile.full_name.split(" ")[0]}`}
-        subtitle={isClient ? `Live view of the work Tauri is doing for ${clients[0]?.name ?? "you"}.` : "Everything happening across Tauri, live."}
+        subtitle={isClient ? `Live view of the work Voltauri is doing for ${clients[0]?.name ?? "you"}.` : "Everything happening across Voltauri, live."}
         actions={
           <Link to="/helpdesk?new=1" className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700">
             New help desk request

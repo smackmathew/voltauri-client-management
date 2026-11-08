@@ -42,7 +42,7 @@ export default function Tasks() {
     <div>
       <PageHeader
         title="Tasks"
-        subtitle={<span className="flex items-center gap-2">{isStaff ? "Planned work for every client." : "Work Tauri has planned for you."} <LiveDot /></span>}
+        subtitle={<span className="flex items-center gap-2">{isStaff ? "Planned work for every client." : "Work Voltauri has planned for you."} <LiveDot /></span>}
         actions={
           <>
             <div className="flex rounded-md border border-slate-300 bg-white p-0.5 text-sm">

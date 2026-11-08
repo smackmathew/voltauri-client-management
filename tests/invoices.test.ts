@@ -118,7 +118,7 @@ describe("billing and invoices", () => {
       client_id: s.acme.id,
       client_name: "Acme Corp",
       bill_to: null,
-      issuer: { name: "Tauri", address: null, payment_instructions: null },
+      issuer: { name: "Voltauri", address: null, payment_instructions: null },
       currency: "USD",
       status: "draft",
       period_start: PERIOD.start,

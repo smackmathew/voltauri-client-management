@@ -102,7 +102,7 @@ function newProfile(user: FirebaseUser, fullName: string) {
 export async function foundOrganization(fullName: string, orgName: string): Promise<Profile> {
   const user = currentUser();
   const batch = writeBatch(db);
-  batch.set(orgDoc(), { name: orgName.trim() || "Tauri", owner_id: user.uid, created_at: serverTimestamp() });
+  batch.set(orgDoc(), { name: orgName.trim() || "Voltauri", owner_id: user.uid, created_at: serverTimestamp() });
   batch.set(profileDoc(user.uid), { ...newProfile(user, fullName), role: "admin", client_id: null, invite_code: null });
   try {
     await commit(batch);

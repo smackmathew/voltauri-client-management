@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // Data layout:
-//   config/org                      -> { name, owner_id }                 the organization (Tauri)
+//   config/org                      -> { name, owner_id }                 the organization (Voltauri)
 //   users/{uid}                     -> { full_name, email, role, client_id, active, active_entry_id }
 //                                      role is 'admin' | 'tech' | 'client'; client users carry their client_id
 //   invites/{code}                  -> { role, client_id, email, used_by } how every user after the first joins

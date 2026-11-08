@@ -1,13 +1,13 @@
-# Tauri Operations Dashboard
+# Voltauri Operations Dashboard
 
-One place for Tauri to run its client work: **clients**, **employees**, **tasks**, **help desk
+One place for Voltauri to run its client work: **clients**, **employees**, **tasks**, **help desk
 requests**, a **time clock** and **billing**. Techs clock in and out against a client, and the hours show up
-on Tauri's screens and on that client's screens the moment they punch, with no refresh. That's
+on Voltauri's screens and on that client's screens the moment they punch, with no refresh. That's
 the accountability: everyone looks at the same live record.
 
 ## Who sees what
 
-| | Admin (Tauri management) | Technician | Client portal user |
+| | Admin (Voltauri management) | Technician | Client portal user |
 | --- | --- | --- | --- |
 | Dashboard | Whole company: who's on the clock, team hours, open tickets and tasks | Their clock, their tickets and tasks | Who's working for them right now, hours this week/month, their tickets and tasks |
 | Time clock | Clock in/out | Clock in/out | — |
@@ -64,7 +64,7 @@ Cloud Functions, so the free **Spark** plan is enough.
 
 ## Putting it online
 
-First, in the [Firebase console](https://console.firebase.google.com), create a project for Tauri,
+First, in the [Firebase console](https://console.firebase.google.com), create a project for Voltauri,
 then:
 
 - **Authentication** → Get started → **Email/Password** → enable.
@@ -103,7 +103,7 @@ rules and indexes. You can also start it by hand. One-time setup:
      These four aren't secret (they're built into the website for every browser), which is why
      they're variables rather than secrets, but the deploy accepts them on either tab.
      `FIREBASE_AUTH_DOMAIN` can be left out if it's the usual `<project-id>.firebaseapp.com`.
-3. **Deploy.** The repository → **Actions** → **Deploy Tauri dashboard** → **Run workflow**. It takes
+3. **Deploy.** The repository → **Actions** → **Deploy** → **Run workflow**. It takes
    about three minutes. The run's summary shows the site's address: `https://<project-id>.web.app`.
 
 From then on, merging a change deploys it. Until the secret and variables are set, the workflow
@@ -118,13 +118,13 @@ You need Node.js 22. In this repository:
 cp .env.example .env.local      # then fill in the web app's config values
 npm ci
 npx firebase login
-npx firebase use --add          # pick the Tauri project
+npx firebase use --add          # pick the Voltauri project
 npx firebase deploy             # builds the site, deploys rules, indexes and hosting
 ```
 
 ### First sign-in
 
-1. Open the site, choose **First time? Set up Tauri** and create your account. The first account
+1. Open the site, choose **First time? Set up Voltauri** and create your account. The first account
    becomes the admin; nobody else can do this step afterwards.
 2. In **Billing → Billing settings**, set your default hourly rate, tax and payment details.
 3. On **Clients**, add your clients. On **Team** → **Invite someone**, create an invite code for each

@@ -97,7 +97,8 @@ export default function Invoice() {
       <article className="invoice-sheet mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
         <header className="flex flex-wrap items-start justify-between gap-6">
           <div>
-            <p className="text-xl font-semibold text-slate-900">{invoice.issuer.name}</p>
+            <img src="/voltauri-logo.png" alt="Voltauri" className="mb-3 h-10 w-auto" />
+            <p className="text-lg font-semibold text-slate-900">{invoice.issuer.name}</p>
             {invoice.issuer.address && <p className="mt-1 whitespace-pre-line text-sm text-slate-500">{invoice.issuer.address}</p>}
           </div>
           <div className="text-right">
