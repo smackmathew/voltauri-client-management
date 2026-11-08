@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { useAuth, useProfile } from "../context/AuthContext";
 import { DirectoryProvider } from "../context/DirectoryContext";
+import { firstName } from "../lib/format";
 import { ROLE_LABELS } from "../lib/labels";
 import type { Role } from "../types";
 import ClockStatus from "./ClockStatus";
@@ -50,7 +51,7 @@ export default function Layout() {
             <div className="flex items-center gap-3">
               {profile.role !== "client" && <ClockStatus />}
               <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium text-slate-700">{profile.full_name}</p>
+                <p className="text-sm font-medium text-slate-700" title={profile.full_name}>{firstName(profile.full_name)}</p>
                 <p className="text-xs text-slate-400">{ROLE_LABELS[profile.role]}</p>
               </div>
               <button onClick={logout} className="text-sm font-medium text-slate-500 hover:text-slate-800">

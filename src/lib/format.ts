@@ -82,3 +82,8 @@ export function startOfMonth(date: Date): Date {
 export function shortId(id: string): string {
   return id.slice(0, 6).toUpperCase();
 }
+
+/** "Terry Tech" -> "Terry", for places where the full name is too long. */
+export function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] || fullName;
+}
