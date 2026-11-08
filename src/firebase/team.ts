@@ -1,8 +1,8 @@
-import { collection, deleteDoc, doc, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
-import type { Invite, Profile, Role } from "../types";
+import { collection, deleteDoc, doc, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from "firebase/firestore";
+import type { EmployeePrivate, Invite, Profile, Role } from "../types";
 import { toProfile } from "./account";
 import { db } from "./app";
-import { snapshotData, toDate, type Mapper } from "./data";
+import { commit, snapshotData, textOrNull, toDate, type Mapper } from "./data";
 
 // No 0/O or 1/I, so a code read aloud or copied by hand comes through intact.
 const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -51,5 +51,44 @@ export const TeamApi = {
     const update: Record<string, unknown> = { ...changes };
     if (changes.role && changes.role !== "client") update.client_id = null;
     return updateDoc(doc(db, "users", id), update);
+  },
+
+  /** Admins only: pay and notes for every employee. */
+  privateQuery: () => collection(db, "employee_private"),
+  privateDoc: (id: string) => doc(db, "employee_private", id),
+  toPrivate: ((snap) => {
+    const data = snapshotData(snap);
+    return { pay_rate_cents: data.pay_rate_cents ?? null, notes: data.notes ?? null };
+  }) as Mapper<EmployeePrivate>,
+
+  /**
+   * Admin: saves an employee's profile and, for staff, their private details, together.
+   * Contact fields are trimmed and stored as null when blank.
+   */
+  saveEmployee: async (
+    admin: Profile,
+    person: Profile,
+    changes: Pick<Profile, "full_name" | "role" | "client_id" | "active" | "phone" | "job_title" | "start_date">,
+    privateDetails: EmployeePrivate | null,
+  ) => {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "users", person.id), {
+      full_name: changes.full_name.trim(),
+      role: changes.role,
+      client_id: changes.role === "client" ? changes.client_id : null,
+      active: changes.active,
+      phone: textOrNull(changes.phone),
+      job_title: textOrNull(changes.job_title),
+      start_date: changes.start_date || null,
+    });
+    if (privateDetails && changes.role !== "client") {
+      batch.set(doc(db, "employee_private", person.id), {
+        pay_rate_cents: privateDetails.pay_rate_cents,
+        notes: textOrNull(privateDetails.notes),
+        updated_by: admin.id,
+        updated_at: serverTimestamp(),
+      });
+    }
+    await commit(batch);
   },
 };

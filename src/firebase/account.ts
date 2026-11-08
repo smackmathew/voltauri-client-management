@@ -42,6 +42,9 @@ export function toProfile(snap: DocumentSnapshot): Profile {
     client_id: data.client_id ?? null,
     active: data.active === true,
     active_entry_id: data.active_entry_id ?? null,
+    phone: data.phone ?? null,
+    job_title: data.job_title ?? null,
+    start_date: data.start_date ?? null,
   };
 }
 

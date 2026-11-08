@@ -2,8 +2,10 @@ rules_version = '2';
 
 // Data layout:
 //   config/org                      -> { name, owner_id }                 the organization (Voltauri)
-//   users/{uid}                     -> { full_name, email, role, client_id, active, active_entry_id }
+//   users/{uid}                     -> { full_name, email, role, client_id, active, active_entry_id,
+//                                        phone, job_title, start_date }
 //                                      role is 'admin' | 'tech' | 'client'; client users carry their client_id
+//   employee_private/{uid}          -> { pay_rate_cents, notes }      admins only, for staff
 //   invites/{code}                  -> { role, client_id, email, used_by } how every user after the first joins
 //   clients/{cid}                   -> { name, contact_name, email, phone, address, notes, active }
 //   tasks/{id}                      -> work items, each for one client
@@ -179,8 +181,11 @@ service cloud.firestore {
 
       function adminEdit() {
         let data = request.resource.data;
-        return changedOnly(['full_name', 'role', 'client_id', 'active', 'active_entry_id'])
+        return changedOnly(['full_name', 'role', 'client_id', 'active', 'active_entry_id', 'phone', 'job_title', 'start_date'])
           && nonEmptyString(data.full_name)
+          && optionalString(data.get('phone', null))
+          && optionalString(data.get('job_title', null))
+          && (data.get('start_date', null) == null || isDate(data.get('start_date', null)))
           && validRoleAndClient(data)
           && data.active is bool
           // An admin can't lock themselves out by demoting or deactivating their own account.
@@ -210,6 +215,18 @@ service cloud.firestore {
           && resource.data.active_entry_id is string
           && getAfter(entryPath(resource.data.active_entry_id)).data.clock_out != null;
       }
+    }
+
+    // Pay and private notes live apart from users/{uid}, which every staff member can read.
+    match /employee_private/{uid} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin()
+        && getAfter(userPath(uid)).data.role in ['admin', 'tech']
+        && hasExactly(request.resource.data, ['pay_rate_cents', 'notes', 'updated_by', 'updated_at'])
+        && optionalCents(request.resource.data.pay_rate_cents)
+        && optionalString(request.resource.data.notes)
+        && request.resource.data.updated_by == request.auth.uid
+        && request.resource.data.updated_at == request.time;
     }
 
     match /invites/{code} {

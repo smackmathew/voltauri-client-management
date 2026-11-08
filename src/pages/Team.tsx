@@ -4,16 +4,20 @@ import { useProfile } from "../context/AuthContext";
 import { useDirectory } from "../context/DirectoryContext";
 import { TeamApi, toInvite } from "../firebase/team";
 import { TimeApi, toEntry } from "../firebase/time";
+import { formatMoney, parseMoney } from "../lib/billing";
 import { timeAgo } from "../lib/format";
 import { ROLE_LABELS } from "../lib/labels";
-import { useLiveQuery } from "../lib/useLive";
-import type { Profile, Role } from "../types";
+import { useLiveDoc, useLiveQuery } from "../lib/useLive";
+import type { EmployeePrivate, Profile, Role } from "../types";
 
 export default function Team() {
   const profile = useProfile();
-  const { people, clientName } = useDirectory();
+  const { people, clientName, org } = useDirectory();
   const invites = useLiveQuery(TeamApi.pendingInvitesQuery(), toInvite, `invites:${profile.id}`);
   const open = useLiveQuery(TimeApi.openQuery(profile), toEntry, `team-open:${profile.id}`);
+  // Pay rates, keyed by employee id. Admins only (this page is admin-only).
+  const privateDocs = useLiveQuery(TeamApi.privateQuery(), (snap) => ({ id: snap.id, ...TeamApi.toPrivate(snap) }), `private:${profile.id}`);
+  const payRate = new Map(privateDocs.data.map((d) => [d.id, d.pay_rate_cents]));
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<Profile | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -27,7 +31,11 @@ export default function Team() {
       <tr key={p.id} className={p.active ? "" : "opacity-50"}>
         <td className="px-4 py-2">
           <p className="font-medium text-slate-800">{p.full_name}{p.id === profile.id && <span className="text-slate-400"> (you)</span>}</p>
-          <p className="text-xs text-slate-500">{p.email}</p>
+          {p.job_title && <p className="text-xs text-slate-600">{p.job_title}</p>}
+          <p className="text-xs text-slate-500">
+            {p.email}
+            {p.phone && <> · <a className="hover:text-brand-700" href={`tel:${p.phone}`}>{p.phone}</a></>}
+          </p>
         </td>
         <td className="px-4 py-2">
           <Badge tone={p.role === "admin" ? "violet" : p.role === "tech" ? "blue" : "slate"}>{ROLE_LABELS[p.role]}</Badge>
@@ -36,8 +44,13 @@ export default function Team() {
         <td className="px-4 py-2 text-xs">
           {!p.active ? <Badge>Deactivated</Badge> : entry ? <Badge tone="green">Clocked in · {entry.client_name}</Badge> : p.role !== "client" ? <span className="text-slate-400">Off the clock</span> : null}
         </td>
+        {p.role !== "client" && (
+          <td className="whitespace-nowrap px-4 py-2 text-right text-xs text-slate-500" title="Pay rate (only admins see this)">
+            {payRate.get(p.id) != null ? `${formatMoney(payRate.get(p.id)!, org?.currency)}/h` : "—"}
+          </td>
+        )}
         <td className="px-4 py-2 text-right">
-          {p.id !== profile.id && <button className="text-xs font-medium text-brand-700" onClick={() => setEditing(p)}>Edit</button>}
+          <button className="text-xs font-medium text-brand-700" onClick={() => setEditing(p)}>Edit</button>
         </td>
       </tr>
     );
@@ -168,37 +181,93 @@ function InviteForm({ onClose }: { onClose: () => void }) {
 }
 
 function PersonForm({ person, onClose }: { person: Profile; onClose: () => void }) {
+  const admin = useProfile();
+  const { org } = useDirectory();
+  const isSelf = person.id === admin.id;
   const [fullName, setFullName] = useState(person.full_name);
   const [role, setRole] = useState<Role>(person.role);
   const [clientId, setClientId] = useState(person.client_id ?? "");
   const [active, setActive] = useState(person.active);
+  const [phone, setPhone] = useState(person.phone ?? "");
+  const [jobTitle, setJobTitle] = useState(person.job_title ?? "");
+  const [startDate, setStartDate] = useState(person.start_date ?? "");
+  const isStaffRole = role !== "client";
+
+  // Private details load separately; they live in an admins-only record.
+  const stored = useLiveDoc(TeamApi.privateDoc(person.id), TeamApi.toPrivate, `private:${person.id}`);
+  const [pay, setPay] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string | null>(null);
+  const payText = pay ?? (stored.data?.pay_rate_cents != null ? (stored.data.pay_rate_cents / 100).toFixed(2) : "");
+  const notesText = notes ?? stored.data?.notes ?? "";
+
   const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const privateDetails: EmployeePrivate | null = isStaffRole ? { pay_rate_cents: parseMoney(payText), notes: notesText } : null;
     try {
-      await TeamApi.updatePerson(person.id, { full_name: fullName.trim(), role, client_id: role === "client" ? clientId : null, active });
+      await TeamApi.saveEmployee(
+        admin,
+        person,
+        { full_name: fullName, role, client_id: role === "client" ? clientId : null, active, phone, job_title: jobTitle, start_date: startDate },
+        privateDetails,
+      );
       onClose();
     } catch (err) {
       setError(err);
+      setBusy(false);
     }
   }
 
   return (
-    <Modal title={`Edit ${person.full_name}`} onClose={onClose}>
+    <Modal title={isSelf ? "Edit your profile" : `Edit ${person.full_name}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
         <Field label="Full name">
           <input className={inputClass} required value={fullName} onChange={(e) => setFullName(e.target.value)} />
         </Field>
-        <RoleAndClient role={role} clientId={clientId} onRole={setRole} onClient={setClientId} />
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-          Active (deactivated accounts can't see anything)
-        </label>
+        <p className="text-xs text-slate-500">Email: {person.email} <span className="text-slate-400">(the sign-in address can't be changed here)</span></p>
+        {isSelf ? (
+          <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">You're an admin. You can't remove your own admin role or deactivate yourself; another admin can.</p>
+        ) : (
+          <>
+            <RoleAndClient role={role} clientId={clientId} onRole={setRole} onClient={setClientId} />
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+              Active (deactivated accounts can't see anything)
+            </label>
+          </>
+        )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Phone">
+            <input className={inputClass} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </Field>
+          <Field label="Job title">
+            <input className={inputClass} value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder={isStaffRole ? "e.g. Field technician" : "e.g. Office manager"} />
+          </Field>
+          {isStaffRole && (
+            <Field label="Start date">
+              <input className={inputClass} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </Field>
+          )}
+        </div>
+        {isStaffRole && (
+          <fieldset className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-amber-800">Admins only</legend>
+            <Field label="Pay rate (per hour)" hint="Used for labor cost on Timesheets. Techs never see it.">
+              <input className={inputClass} inputMode="decimal" placeholder={`e.g. ${formatMoney(3500, org?.currency)}`} value={payText} onChange={(e) => setPay(e.target.value)} />
+            </Field>
+            <Field label="Private notes" hint="Certifications, emergency contact, anything else.">
+              <textarea className={inputClass} rows={3} value={notesText} onChange={(e) => setNotes(e.target.value)} />
+            </Field>
+          </fieldset>
+        )}
         <ErrorNote error={error} />
         <div className="flex justify-end gap-2">
           <button type="button" className={buttonClass.secondary} onClick={onClose}>Cancel</button>
-          <button type="submit" className={buttonClass.primary}>Save</button>
+          <button type="submit" className={buttonClass.primary} disabled={busy || stored.loading}>Save</button>
         </div>
       </form>
     </Modal>
