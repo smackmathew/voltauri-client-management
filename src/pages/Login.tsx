@@ -51,8 +51,9 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-50 via-white to-slate-100 px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center">
-          <h1>
-            <img src="/voltauri-logo.png" alt="Voltauri" className="mx-auto h-12 w-auto" />
+          <h1 className="flex items-center justify-center gap-3">
+            <img src="/voltauri-logo.png" alt="Voltauri" className="h-12 w-auto" />
+            <span className="border-l-2 border-slate-300 pl-3 text-xl font-bold uppercase tracking-[0.2em] text-brand-600">Portal</span>
           </h1>
           <p className="mt-4 text-lg font-semibold text-slate-800">Operations dashboard</p>
           <p className="text-sm text-slate-500">Clients, tasks, help desk and time — live for your team and your clients.</p>

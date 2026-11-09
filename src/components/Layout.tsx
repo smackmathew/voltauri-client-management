@@ -37,8 +37,11 @@ export default function Layout() {
         <header className="no-print sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
             <div className="flex items-center gap-6">
-              <Link to="/" className="shrink-0">
-                <img src="/voltauri-logo.png" alt="Voltauri" className="h-7 w-auto" />
+              <Link to="/" className="flex shrink-0 items-center gap-2.5">
+                {/* Phones show just the icon, so the header still fits next to the clock button. */}
+                <img src="/voltauri-mark.png" alt="Voltauri" className="h-7 w-7 sm:hidden" />
+                <img src="/voltauri-logo.png" alt="Voltauri" className="hidden h-7 w-auto sm:block" />
+                <span className="border-l border-slate-300 pl-2.5 text-sm font-bold uppercase tracking-[0.2em] text-brand-600">Portal</span>
               </Link>
               <nav className="hidden gap-1 lg:flex">
                 {items.map((item) => (
