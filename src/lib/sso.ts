@@ -5,7 +5,8 @@ import type { Role } from "../types";
  * /sso?to=<target>&next=<path>; the Portal checks who they are and hands that site a fresh
  * Portal ID token, which the site's own server exchanges for a sign-in of its own.
  *
- * Tokens are only ever handed to the origins listed here.
+ * Tokens are only ever handed to the origins listed here. Each site checks the role again on its
+ * side (ADMIN_ROLES in the Admin CRM, HUB_ROLES in Sites), so a new role such as sales goes in all three.
  */
 export interface SsoTarget {
   label: string;
