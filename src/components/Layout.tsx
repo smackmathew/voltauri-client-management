@@ -5,6 +5,7 @@ import { DirectoryProvider } from "../context/DirectoryContext";
 import type { Role } from "../types";
 import ClockStatus from "./ClockStatus";
 import ProfileMenu from "./ProfileMenu";
+import VerifyEmailBanner from "./VerifyEmailBanner";
 import { PageLoader } from "./ui";
 
 const NAV_ITEMS: { to: string; label: string; roles: Role[]; end?: boolean }[] = [
@@ -62,6 +63,7 @@ export default function Layout() {
             ))}
           </nav>
         </header>
+        <VerifyEmailBanner />
         <main className="mx-auto max-w-7xl px-4 py-6">
           <Suspense fallback={<PageLoader />}>
             <Outlet />

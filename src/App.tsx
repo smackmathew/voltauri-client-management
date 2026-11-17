@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Layout from "./components/Layout";
 import { PageLoader } from "./components/ui";
 import { useAuth } from "./context/AuthContext";
@@ -17,14 +17,17 @@ const Team = lazy(() => import("./pages/Team"));
 const Ticket = lazy(() => import("./pages/Ticket"));
 const TimeClock = lazy(() => import("./pages/TimeClock"));
 const Timesheets = lazy(() => import("./pages/Timesheets"));
+const Sso = lazy(() => import("./pages/Sso"));
 
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { profile, loading } = useAuth();
+  const location = useLocation();
   if (loading) {
     return <div className="flex h-screen items-center justify-center text-slate-500">Loading...</div>;
   }
   if (!profile || !profile.active) {
-    return <Navigate to="/login" replace />;
+    // Remember where they were headed (e.g. /sso from another site), so sign-in can return there.
+    return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
   }
   return children;
 }
@@ -44,6 +47,16 @@ export default function App() {
           <Suspense fallback={<PageLoader />}>
             <Login />
           </Suspense>
+        }
+      />
+      <Route
+        path="/sso"
+        element={
+          <RequireAuth>
+            <Suspense fallback={<PageLoader />}>
+              <Sso />
+            </Suspense>
+          </RequireAuth>
         }
       />
       <Route

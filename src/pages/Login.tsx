@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { buttonClass, ErrorNote, Field, inputClass } from "../components/ui";
 import { useAuth } from "../context/AuthContext";
 
@@ -16,7 +16,9 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  if (profile) return <Navigate to="/" replace />;
+  // Back to where they were headed, if it's a page in this app.
+  const from = (useLocation().state as { from?: string } | null)?.from;
+  if (profile) return <Navigate to={from && from.startsWith("/") && !from.startsWith("//") ? from : "/"} replace />;
 
   async function submit(e: FormEvent) {
     e.preventDefault();

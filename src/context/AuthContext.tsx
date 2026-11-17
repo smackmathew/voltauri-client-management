@@ -9,6 +9,11 @@ interface AuthContextValue {
   /** The signed-in user's profile, kept live: role changes and clock status show up at once. */
   profile: Profile | null;
   loading: boolean;
+  /** Whether the signed-in person has verified their email, which single sign-on requires. */
+  emailVerified: boolean;
+  sendVerification: () => Promise<void>;
+  /** Re-checks verification (after they click the link in another tab); resolves to the new value. */
+  refreshVerified: () => Promise<boolean>;
   /** Signed in, but hasn't joined yet (e.g. a mistyped invite code at sign-up). */
   needsProfile: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -24,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [needsProfile, setNeedsProfile] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [emailVerified, setEmailVerified] = useState(false);
   // Bumped after sign-up creates the profile, to re-subscribe to it.
   const [generation, setGeneration] = useState(0);
   // Sign-up creates the account before the profile exists; don't report "no profile" in between.
@@ -31,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => onAuthStateChanged(auth, (user) => {
     setFirebaseUser(user);
+    setEmailVerified(user?.emailVerified ?? false);
     if (user) {
       setLoading(true);
     } else {
@@ -88,8 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AccountApi.logout();
   }
 
+  async function refreshVerified() {
+    const verified = await AccountApi.refreshVerified();
+    setEmailVerified(verified);
+    return verified;
+  }
+
   return (
-    <AuthContext.Provider value={{ profile, loading, needsProfile, login, signup, finishSetup, logout }}>
+    <AuthContext.Provider value={{ profile, loading, needsProfile, login, signup, finishSetup, logout, emailVerified, sendVerification: AccountApi.sendVerification, refreshVerified }}>
       {children}
     </AuthContext.Provider>
   );

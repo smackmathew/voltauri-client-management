@@ -1,5 +1,6 @@
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   type User as FirebaseUser,
@@ -171,11 +172,33 @@ export const AccountApi = {
 
   signup: async (payload: SignupPayload): Promise<Profile> => {
     try {
-      await createUserWithEmailAndPassword(auth, payload.email.trim(), payload.password);
+      const { user } = await createUserWithEmailAndPassword(auth, payload.email.trim(), payload.password);
+      // Verifying the address once is what lets the one login open the other Voltauri sites.
+      void sendEmailVerification(user).catch(() => {});
     } catch (error) {
       throw friendlyError(error);
     }
     return completeProfile(payload);
+  },
+
+  /** Emails the signed-in person a link to verify their address. */
+  sendVerification: async (): Promise<void> => {
+    if (!auth.currentUser) throw new AuthError("Not signed in");
+    try {
+      await sendEmailVerification(auth.currentUser);
+    } catch (error) {
+      if ((error as { code?: string }).code === "auth/too-many-requests") {
+        throw new AuthError("A link was sent recently. Check your inbox (and spam), or try again in a few minutes.");
+      }
+      throw friendlyError(error);
+    }
+  },
+
+  /** Re-reads the account, so a link clicked in another tab is noticed. */
+  refreshVerified: async (): Promise<boolean> => {
+    if (!auth.currentUser) return false;
+    await auth.currentUser.reload();
+    return auth.currentUser.emailVerified;
   },
 
   logout: () => firebaseSignOut(auth),

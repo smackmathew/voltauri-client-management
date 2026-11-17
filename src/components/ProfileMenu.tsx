@@ -4,7 +4,7 @@ import { updateOwnProfile } from "../firebase/account";
 import { firstName } from "../lib/format";
 import { squarePhoto } from "../lib/image";
 import { ROLE_LABELS } from "../lib/labels";
-import { sitesFor } from "../lib/sites";
+import { siteHref, sitesFor } from "../lib/sites";
 import Avatar from "./Avatar";
 import { buttonClass, ErrorNote, Field, inputClass, Modal } from "./ui";
 
@@ -106,7 +106,7 @@ export default function ProfileMenu() {
                 <a
                   key={site.url}
                   role="menuitem"
-                  href={site.url}
+                  href={siteHref(site)}
                   target={site.current ? undefined : "_blank"}
                   rel={site.current ? undefined : "noopener noreferrer"}
                   aria-current={site.current ? "page" : undefined}
