@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Tone } from "../lib/labels";
 
 const TONES: Record<Tone, string> = {
@@ -112,7 +113,8 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-  return (
+  // Rendered at the end of <body>: inside the header, its blur would trap this fixed overlay.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div
         role="dialog"
@@ -129,6 +131,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         </div>
         <div className="px-5 py-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

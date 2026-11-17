@@ -1,11 +1,10 @@
 import { Suspense } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { useAuth, useProfile } from "../context/AuthContext";
+import { useProfile } from "../context/AuthContext";
 import { DirectoryProvider } from "../context/DirectoryContext";
-import { firstName } from "../lib/format";
-import { ROLE_LABELS } from "../lib/labels";
 import type { Role } from "../types";
 import ClockStatus from "./ClockStatus";
+import ProfileMenu from "./ProfileMenu";
 import { PageLoader } from "./ui";
 
 const NAV_ITEMS: { to: string; label: string; roles: Role[]; end?: boolean }[] = [
@@ -21,7 +20,6 @@ const NAV_ITEMS: { to: string; label: string; roles: Role[]; end?: boolean }[] =
 ];
 
 export default function Layout() {
-  const { logout } = useAuth();
   const profile = useProfile();
   const items = NAV_ITEMS.filter((item) => item.roles.includes(profile.role));
 
@@ -53,13 +51,7 @@ export default function Layout() {
             </div>
             <div className="flex items-center gap-3">
               {profile.role !== "client" && <ClockStatus />}
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium text-slate-700" title={profile.full_name}>{firstName(profile.full_name)}</p>
-                <p className="text-xs text-slate-400">{ROLE_LABELS[profile.role]}</p>
-              </div>
-              <button onClick={logout} className="text-sm font-medium text-slate-500 hover:text-slate-800">
-                Sign out
-              </button>
+              <ProfileMenu />
             </div>
           </div>
           <nav className="flex gap-1 overflow-x-auto border-t border-slate-100 px-4 py-2 lg:hidden">

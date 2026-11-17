@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import Avatar from "../components/Avatar";
 import { Badge, buttonClass, Card, Empty, ErrorNote, Field, inputClass, Modal, PageHeader } from "../components/ui";
 import { useProfile } from "../context/AuthContext";
 import { useDirectory } from "../context/DirectoryContext";
@@ -30,12 +31,17 @@ export default function Team() {
     return (
       <tr key={p.id} className={p.active ? "" : "opacity-50"}>
         <td className="px-4 py-2">
+          <div className="flex items-center gap-3">
+          <Avatar name={p.full_name} photo={p.photo} size="sm" />
+          <div className="min-w-0">
           <p className="font-medium text-slate-800">{p.full_name}{p.id === profile.id && <span className="text-slate-400"> (you)</span>}</p>
           {p.job_title && <p className="text-xs text-slate-600">{p.job_title}</p>}
           <p className="text-xs text-slate-500">
             {p.email}
             {p.phone && <> · <a className="hover:text-brand-700" href={`tel:${p.phone}`}>{p.phone}</a></>}
           </p>
+          </div>
+          </div>
         </td>
         <td className="px-4 py-2">
           <Badge tone={p.role === "admin" ? "violet" : p.role === "tech" ? "blue" : "slate"}>{ROLE_LABELS[p.role]}</Badge>

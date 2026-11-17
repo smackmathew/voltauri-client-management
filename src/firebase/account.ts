@@ -45,6 +45,7 @@ export function toProfile(snap: DocumentSnapshot): Profile {
     phone: data.phone ?? null,
     job_title: data.job_title ?? null,
     start_date: data.start_date ?? null,
+    photo: data.photo ?? null,
   };
 }
 
@@ -79,6 +80,11 @@ export function toOrganization(snap: DocumentSnapshot): Organization {
 export async function loadOrganization(): Promise<Organization | null> {
   const snap = await getDoc(orgDoc());
   return snap.exists() ? toOrganization(snap) : null;
+}
+
+/** The signed-in person edits their own name and photo. */
+export function updateOwnProfile(uid: string, changes: { full_name: string; photo: string | null }) {
+  return updateDoc(profileDoc(uid), { full_name: changes.full_name.trim(), photo: changes.photo });
 }
 
 /** Admin: the company name and billing settings. */

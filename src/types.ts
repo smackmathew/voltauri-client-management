@@ -14,6 +14,8 @@ export interface Profile {
   job_title: string | null;
   /** YYYY-MM-DD */
   start_date: string | null;
+  /** A small square profile photo, as a data: URL. */
+  photo: string | null;
 }
 
 /** An employee's details only admins can see. */
