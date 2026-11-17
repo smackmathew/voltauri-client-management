@@ -3,7 +3,7 @@ rules_version = '2';
 // Data layout:
 //   config/org                      -> { name, owner_id }                 the organization (Voltauri)
 //   users/{uid}                     -> { full_name, email, role, client_id, active, active_entry_id,
-//                                        phone, job_title, start_date }
+//                                        phone, job_title, start_date, photo }
 //                                      role is 'admin' | 'tech' | 'client'; client users carry their client_id
 //   employee_private/{uid}          -> { pay_rate_cents, notes }      admins only, for staff
 //   invites/{code}                  -> { role, client_id, email, used_by } how every user after the first joins
@@ -93,6 +93,13 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
+    // A small square profile photo, stored inline as an image data: URL.
+    function validPhoto(value) {
+      return value == null
+        || (value is string && value.size() <= 150000
+          && value.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$'));
+    }
+
     function hasExactly(data, keys) {
       return data.keys().hasOnly(keys) && data.keys().hasAll(keys);
     }
@@ -149,7 +156,7 @@ service cloud.firestore {
         && (foundingAdmin(request.resource.data) || joiningWithInvite(request.resource.data));
 
       allow update: if (isAdmin() && adminEdit())
-        || (signedIn() && request.auth.uid == uid && (renaming() || clockingIn() || clockingOut()));
+        || (signedIn() && request.auth.uid == uid && (editingOwnProfile() || clockingIn() || clockingOut()));
 
       function validNewProfile(data) {
         return hasExactly(data, ['full_name', 'email', 'role', 'client_id', 'active', 'active_entry_id', 'invite_code', 'created_at'])
@@ -181,8 +188,9 @@ service cloud.firestore {
 
       function adminEdit() {
         let data = request.resource.data;
-        return changedOnly(['full_name', 'role', 'client_id', 'active', 'active_entry_id', 'phone', 'job_title', 'start_date'])
+        return changedOnly(['full_name', 'role', 'client_id', 'active', 'active_entry_id', 'phone', 'job_title', 'start_date', 'photo'])
           && nonEmptyString(data.full_name)
+          && validPhoto(data.get('photo', null))
           && optionalString(data.get('phone', null))
           && optionalString(data.get('job_title', null))
           && (data.get('start_date', null) == null || isDate(data.get('start_date', null)))
@@ -194,8 +202,11 @@ service cloud.firestore {
           && (unchanged(['active_entry_id']) || data.active_entry_id == null);
       }
 
-      function renaming() {
-        return changedOnly(['full_name']) && nonEmptyString(request.resource.data.full_name);
+      // Anyone may change their own name and photo; everything else about them is an admin's call.
+      function editingOwnProfile() {
+        return changedOnly(['full_name', 'photo'])
+          && nonEmptyString(request.resource.data.full_name)
+          && validPhoto(request.resource.data.get('photo', null));
       }
 
       // Points at a time entry created in this same batch.
